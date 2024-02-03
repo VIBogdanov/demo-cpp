@@ -5,6 +5,8 @@ using namespace std;
 
 int main()
 {
+	// Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида.
 	cout << sundry::get_common_divisor(20, 12) << endl;
+
 	return 0;
 }
