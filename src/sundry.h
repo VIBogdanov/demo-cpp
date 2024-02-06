@@ -51,35 +51,38 @@ namespace sundry {
 		}
 
 		// Стартуем с первого и последнего индекса массива одновременно
-		size_t i_first = 0;
+		size_t i_first = 0, i_middle = 0;
 		size_t i_last = elements.size() - 1;
 
 		// Определяем порядок сортировки исходного массива
 		bool is_forward = (*(--elements.end()) >= *(elements.begin()));
 
+		// Для перемещения по данным используем итератор вместо индекса, чтобы
+		// была возможность работать с контейнерами, которые не поддерживают индексацию
+		auto iter_element = elements.begin();
+		auto iter_diff{ 0 }; //Текущее смещение для итеротора в процессе поиска (вперед / назад)
+
 		// Возвращаемый индекс найденного значения
-		int i_target = -1;
+		int i_result = -1;
 
-		while (i_first <= i_last and i_target < 0)
+		while (i_first <= i_last and i_result < 0)
 		{
-			// Делим текущий остаток массива пополам
-			size_t i_middle = (i_first + i_last) >> 1;
+			// Вычисляем смещение итератора делением текущего диапазона поиска пополам
+			iter_diff = ((i_first + i_last) >> 1) - i_middle;
+			i_middle = (i_first + i_last) >> 1;
+			// Смещаем итератор на середину нового диапазона поиска. Смещение возможно как вперед, твк и назад
+			std::ranges::advance(iter_element, iter_diff, (iter_diff >= 0) ? elements.end() : elements.begin());
 
-			// Сравниваем срединный элемент с искомым значением
-			// Смещаем начальный или конечный индексы в зависимости
-			// от результата сравнения и от направления сортировки
-			auto it_elem = elements.begin();
-			std::advance(it_elem, i_middle);
-
-			if (*it_elem < target)
+			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
+			if (*iter_element < target)
 				(is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
-			else if (*it_elem > target)
+			else if (*iter_element > target)
 				(is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1;
 			else
-				i_target = static_cast<int>(i_middle);
+				i_result = static_cast<int>(i_middle);
 		}
 
-		return i_target;
+		return i_result;
 	}
 
 
@@ -90,7 +93,7 @@ namespace sundry {
 		// Перегруженная версия функции для обработки обычных числовых и строковых массивов.
 		auto _size = N;;
 		// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-		if ((typeid(*("")) == typeid(*elements)) and !*(elements + _size))
+		if ((typeid(T) == typeid(char)) and !*(elements + _size - 1))
 			--_size;
 
 		return sundry::find_item_by_binary(std::vector<T>(elements, elements + _size), target);
