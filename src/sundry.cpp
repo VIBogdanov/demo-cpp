@@ -3,10 +3,13 @@ SUNDRY.CPP
 Набор различных функций реализующие алгоритмы сортировки, поиска, фильтрации и т.п.
 Каждая функция имеет подробное описание и готова к применению.
 */
+#include <algorithm>
+#include <math.h>
+#include <utility>
+
 #include "sundry.h"
 
 using namespace std;
-using namespace sundry;
 
 
 int sundry::get_common_divisor(const int& number_a, const int& number_b)
