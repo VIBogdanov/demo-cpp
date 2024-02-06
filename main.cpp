@@ -1,5 +1,6 @@
 ﻿#include <iostream>
 #include <locale.h>
+#include <vector>
 
 #include "src/sundry.h"
 #include "src/assistools.h"
@@ -19,6 +20,10 @@ int main()
 	// Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида.
 	cout << "get_common_divisor(20, 12) -> ";
 	cout << sundry::get_common_divisor(20, 12) << endl;
+
+	// Поиск элемента в массиве данных при помощи бинарного алгоритма..
+	cout << "find_item_by_binary({ 20, 30, 40, 50 }, 30) -> ";
+	cout << sundry::find_item_by_binary({ 20, 30, 40, 50 }, 30) << endl;
 
 	return 0;
 }
