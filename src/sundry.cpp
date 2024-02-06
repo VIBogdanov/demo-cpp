@@ -9,15 +9,13 @@ SUNDRY.CPP
 
 #include "sundry.h"
 
-using namespace std;
-
 
 int sundry::get_common_divisor(const int& number_a, const int& number_b)
 {
 	auto divisible = 0, divisor = 0;
 
 	// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
-	pair<int, int> minmax_values = minmax(abs(number_a), abs(number_b));
+	std::pair<int, int> minmax_values = std::minmax(abs(number_a), abs(number_b));
 
 	if (minmax_values.first) // Вычисляем только если делитель не равен нулю.
 	{
