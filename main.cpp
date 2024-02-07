@@ -1,6 +1,5 @@
 ﻿#include <iostream>
 #include <locale.h>
-#include <vector>
 
 #include "src/sundry.h"
 #include "src/assistools.h"

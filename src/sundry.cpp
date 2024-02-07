@@ -9,25 +9,28 @@ SUNDRY.CPP
 #include "sundry.h"
 
 
-int sundry::get_common_divisor(const int& number_a, const int& number_b)
+namespace sundry
 {
-	auto divisible = 0, divisor = 0;
-
-	// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
-	std::pair<int, int> minmax_values = std::minmax(abs(number_a), abs(number_b));
-
-	if (minmax_values.first) // Вычисляем только если делитель не равен нулю.
+	int get_common_divisor(const int& number_a, const int& number_b)
 	{
-		divisible = minmax_values.second;
-		divisor = minmax_values.first;
+		auto divisible = 0, divisor = 0;
 
-		while (auto _div{ divisible % divisor }) {
-			divisible = divisor;
-			divisor = _div;
+		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
+		std::pair<int, int> minmax_values = std::minmax(abs(number_a), abs(number_b));
+
+		if (minmax_values.first) // Вычисляем только если делитель не равен нулю.
+		{
+			divisible = minmax_values.second;
+			divisor = minmax_values.first;
+
+			while (auto _div{ divisible % divisor }) {
+				divisible = divisor;
+				divisor = _div;
+			}
 		}
-	}
-	else
-		divisor = minmax_values.second;
+		else
+			divisor = minmax_values.second;
 
-	return divisor;
+		return divisor;
+	}
 }
