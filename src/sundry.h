@@ -88,26 +88,25 @@ namespace
 		int i_result = -1;
 
 		// Получаем размер массива данных
-		typename std::iterator_traits<TIterator>::difference_type _size = std::distance(first, last);
+		auto _size = std::ranges::distance(first, last);
 
 		switch (_size)
 		{
 		case 0:
 			return -1;
 		case 1:
-			typename std::iterator_traits<TIterator>::value_type _value = *first;
+			auto _value = *first;
 			return (_value == target) ? 0 : -1;
 		}
 
 		// Стартуем с первого и последнего индекса массива одновременно
 		int i_first = 0, i_middle = 0;
-		int i_last = _size - 1;
+		int i_last = static_cast<int>(_size - 1);
 
 		// Определяем порядок сортировки исходного массива
 		bool is_forward;
 		{
-			typename std::iterator_traits<TIterator>::value_type _first_value = *first;
-			typename std::iterator_traits<TIterator>::value_type _last_value = *--last;
+			auto _first_value = *first, _last_value = *(last - 1);
 			is_forward = (_last_value >= _first_value);
 		}
 
@@ -124,7 +123,7 @@ namespace
 			// Смещаем итератор на середину нового диапазона поиска
 			std::ranges::advance(iter_element, iter_diff, (iter_diff >= 0) ? last : first);
 			// Получаем значение текущего элемента данных, на который указывает итератор
-			typename std::iterator_traits<TIterator>::value_type _value = *iter_element;
+			auto _value = *iter_element;
 			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
 			if (_value < target)
 				(is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
