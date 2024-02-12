@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 
+//****************************************** Public header *************************************************
 namespace sundry
 {
 	/**
@@ -50,7 +51,8 @@ namespace sundry
 	@details В качестве входных данных могут быть использованы как обычные массивы, так и контейнеры из стандартной библиотеки.
 
 	@example find_item_by_binary({ 'a', 'b', 'c'}, 'c') -> 2
-			 find_item_by_binary({ 10.1, 20.2, 30.3, 40.4, 50.5, 60.6 }, 40.4) -> 3
+			 find_item_by_binary({ -10.1, -20.2, -30.3, -40.4, -50.5, -60.6 }, -40.4) -> 3
+			 find_item_by_binary("abcdefgh", 'd') -> 3
 
 	@param (T(&)[N]) C-массив числовых и строковых данных
 	@param (T&) Искомое значение
@@ -82,55 +84,49 @@ namespace sundry
 namespace
 {
 	template <typename TIterator, typename T>
-	int _find_item_by_binary(TIterator first, TIterator last, const T& target)
+	int _find_item_by_binary(const TIterator& first, const TIterator& last, const T& target)
 	{
 		// Возвращаемый индекс найденного значения
 		int i_result = -1;
 
 		// Получаем размер массива данных
-		auto _size = std::ranges::distance(first, last);
+		int _size = static_cast<int>(std::distance(first, last));
 
 		switch (_size)
 		{
-		case 0:
-			return -1;
 		case 1:
-			auto _value = *first;
-			return (_value == target) ? 0 : -1;
+			i_result = (std::equal_to<T>{}(*first, target)) ? 0 : -1;
+			[[fallthrough]];
+		case 0:
+			return i_result;
 		}
+
+		if (std::greater<T>{}(*first, target) or std::greater<T>{}(target, *(last - 1)))
+			return i_result;
 
 		// Стартуем с первого и последнего индекса массива одновременно
 		int i_first = 0, i_middle = 0;
-		int i_last = static_cast<int>(_size - 1);
-
-		// Определяем порядок сортировки исходного массива
-		bool is_forward;
-		{
-			auto _first_value = *first, _last_value = *(last - 1);
-			is_forward = (_last_value >= _first_value);
-		}
+		int i_last = (_size - 1);
 
 		// Для перемещения по данным используем итератор вместо индекса, чтобы
 		// была возможность работать с контейнерами, которые не поддерживают индексацию
 		auto iter_element = first;
-		int iter_diff{ 0 }; //Текущее смещение для итеротора в процессе поиска (вперед / назад)
+		int iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
 
 		while (i_first <= i_last and i_result < 0)
 		{
 			// Вычисляем смещение итератора делением текущего диапазона поиска пополам
 			iter_diff = ((i_first + i_last) >> 1) - i_middle;
 			i_middle = (i_first + i_last) >> 1;
+
 			// Смещаем итератор на середину нового диапазона поиска
-			std::ranges::advance(iter_element, iter_diff, (iter_diff >= 0) ? last : first);
-			// Получаем значение текущего элемента данных, на который указывает итератор
-			auto _value = *iter_element;
+			std::advance(iter_element, iter_diff);
+
 			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
-			if (_value < target)
-				(is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
-			else if (_value > target)
-				(is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1;
-			else
+			if (std::equal_to<T>{}(*iter_element, target))
 				i_result = i_middle;
+			else
+				(std::greater<T>{}(*iter_element, target)) ? i_last = i_middle - 1 : i_first = i_middle + 1;
 		}
 
 		return i_result;
@@ -144,7 +140,10 @@ namespace sundry
 	template <template <class...> typename TContainer, typename T>
 	int find_item_by_binary(const TContainer<T>& elements, const T& target)
 	{
-		return _find_item_by_binary(elements.begin(), elements.end(), target);
+		if (std::greater<>{}(*elements.begin(), *(elements.end() - 1)))
+			return _find_item_by_binary(elements.rbegin(), elements.rend(), target);
+		else
+			return _find_item_by_binary(elements.begin(), elements.end(), target);
 	}
 
 

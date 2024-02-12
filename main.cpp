@@ -21,8 +21,8 @@ int main()
 	cout << sundry::get_common_divisor(20, 12) << endl;
 
 	cout << endl << " - Поиск элемента в массиве данных при помощи бинарного алгоритма." << endl;
-	cout << " find_item_by_binary({ 20, 30, 40, 50 }, 30) -> ";
-	cout << sundry::find_item_by_binary({ 20, 30, 40, 50 }, 30) << endl;
+	cout << " find_item_by_binary({ -20, 30, 40, 50 }, 30) -> ";
+	cout << sundry::find_item_by_binary({ -20, 30, 40, 50 }, 30) << endl;
 
 	return 0;
 }
