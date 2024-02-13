@@ -39,16 +39,16 @@ namespace sundry
 	@param (TContainer<T>&) Массив с данными контейнерного типа
 	@param (T&) Искомое значение
 
-	@return (int) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	@return (int) В качестве входных данных могут быть использованы контейнеры из стандартной библиотеки.
 	*/
 	template <template <class...> typename TContainer, typename T>
-	int find_item_by_binary(const TContainer<T>&, const T&);
+	decltype(auto) find_item_by_binary(const TContainer<T>&, const T&);
 
 
 	/**
 	@brief Поиск элемента в массиве данных при помощи бинарного алгоритма. При поиске учитывается направление сортировки массива.
 
-	@details В качестве входных данных могут быть использованы как обычные массивы, так и контейнеры из стандартной библиотеки.
+	@details В качестве входных данных могут быть использованы  c-массивы.
 
 	@example find_item_by_binary({ 'a', 'b', 'c'}, 'c') -> 2
 			 find_item_by_binary({ -10.1, -20.2, -30.3, -40.4, -50.5, -60.6 }, -40.4) -> 3
@@ -60,13 +60,13 @@ namespace sundry
 	@return (int) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template <typename T, std::size_t N>
-	int find_item_by_binary(const T(&)[N], const T&);
+	decltype(auto) find_item_by_binary(const T(&)[N], const T&);
 
 
 	/**
 	@brief Поиск элемента в массиве данных при помощи бинарного алгоритма. При поиске учитывается направление сортировки массива.
 
-	@details В качестве входных данных могут быть использованы как обычные массивы, так и контейнеры из стандартной библиотеки.
+	@details В качестве входных данных могут быть использованы  массивы из стандартной библиотеки.
 
 	@example find_item_by_binary(std::array<int, 3>{ 1, 2, 3 }, 3) -> 2
 
@@ -76,7 +76,7 @@ namespace sundry
 	@return (int) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template<template<typename T, std::size_t N> typename TArray, typename T, std::size_t N>
-	int find_item_by_binary(const TArray<T, N>&, const T&);
+	decltype(auto) find_item_by_binary(const TArray<T, N>&, const T&);
 }
 
 
@@ -84,13 +84,13 @@ namespace sundry
 namespace
 {
 	template <typename TIterator, typename T>
-	int _find_item_by_binary(const TIterator& first, const TIterator& last, const T& target)
+	decltype(auto) _find_item_by_binary(const TIterator& first, const TIterator& last, const T& target)
 	{
-		// Возвращаемый индекс найденного значения
-		int i_result = -1;
-
 		// Получаем размер массива данных
-		int _size = static_cast<int>(std::distance(first, last));
+		auto _size = std::distance(first, last);
+
+		// Возвращаемый индекс найденного значения
+		decltype(_size) i_result = -1;
 
 		switch (_size)
 		{
@@ -101,17 +101,17 @@ namespace
 			return i_result;
 		}
 
-		if (std::greater<T>{}(*first, target) or std::greater<T>{}(target, *(last - 1)))
-			return i_result;
+		// Определяем порядок сортировки исходного массива
+		bool is_forward = std::greater_equal<>{}(*(last - 1), *first);
 
 		// Стартуем с первого и последнего индекса массива одновременно
-		int i_first = 0, i_middle = 0;
-		int i_last = (_size - 1);
+		decltype(_size) i_first = 0, i_middle = 0;
+		decltype(_size) i_last = (_size - 1);
 
 		// Для перемещения по данным используем итератор вместо индекса, чтобы
 		// была возможность работать с контейнерами, которые не поддерживают индексацию
 		auto iter_element = first;
-		int iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
+		decltype(_size) iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
 
 		while (i_first <= i_last and i_result < 0)
 		{
@@ -126,7 +126,9 @@ namespace
 			if (std::equal_to<T>{}(*iter_element, target))
 				i_result = i_middle;
 			else
-				(std::greater<T>{}(*iter_element, target)) ? i_last = i_middle - 1 : i_first = i_middle + 1;
+				(std::greater<T>{}(*iter_element, target))
+				? (is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1
+				: (is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
 		}
 
 		return i_result;
@@ -138,17 +140,14 @@ namespace
 namespace sundry
 {
 	template <template <class...> typename TContainer, typename T>
-	int find_item_by_binary(const TContainer<T>& elements, const T& target)
+	decltype(auto) find_item_by_binary(const TContainer<T>& elements, const T& target)
 	{
-		if (std::greater<>{}(*elements.begin(), *(elements.end() - 1)))
-			return _find_item_by_binary(elements.rbegin(), elements.rend(), target);
-		else
-			return _find_item_by_binary(elements.begin(), elements.end(), target);
+		return _find_item_by_binary(elements.begin(), elements.end(), target);
 	}
 
 
 	template <typename T, std::size_t N>
-	int find_item_by_binary(const T(&elements)[N], const T& target)
+	decltype(auto) find_item_by_binary(const T(&elements)[N], const T& target)
 	{
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if ((typeid(T) == typeid(char)) and !*(std::end(elements) - 1))
@@ -160,7 +159,7 @@ namespace sundry
 
 
 	template <template<typename T, std::size_t N> typename TArray, typename T, std::size_t N>
-	int find_item_by_binary(const TArray<T, N>& elements, const T& target)
+	decltype(auto) find_item_by_binary(const TArray<T, N>& elements, const T& target)
 	{
 		// Перегруженная версия функции для обработки std::array.
 		return _find_item_by_binary(elements.begin(), elements.end(), target);
