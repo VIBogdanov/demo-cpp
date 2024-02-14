@@ -90,7 +90,7 @@ namespace
 		auto _size = std::distance(first, last);
 
 		// Возвращаемый индекс найденного значения
-		decltype(_size) i_result = -1;
+		decltype(_size) i_result{ -1 };
 
 		switch (_size)
 		{
@@ -102,15 +102,18 @@ namespace
 		}
 
 		// Определяем порядок сортировки исходного массива
-		bool is_forward = std::greater_equal<>{}(*(last - 1), *first);
+		// Для контейнера std::list<T> получение последнего элемента через *(last-1) не работает
+		auto iter_element = last;
+		std::advance(iter_element, -1);
+		bool is_forward = std::greater_equal<>{}(*iter_element, *first);
 
 		// Стартуем с первого и последнего индекса массива одновременно
-		decltype(_size) i_first = 0, i_middle = 0;
+		decltype(_size) i_first{ 0 }, i_middle{ 0 };
 		decltype(_size) i_last = (_size - 1);
 
 		// Для перемещения по данным используем итератор вместо индекса, чтобы
 		// была возможность работать с контейнерами, которые не поддерживают индексацию
-		auto iter_element = first;
+		iter_element = first;
 		decltype(_size) iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
 
 		while (i_first <= i_last and i_result < 0)
@@ -142,7 +145,7 @@ namespace sundry
 	template <template <class...> typename TContainer, typename T>
 	decltype(auto) find_item_by_binary(const TContainer<T>& elements, const T& target)
 	{
-		return _find_item_by_binary(elements.begin(), elements.end(), target);
+		return _find_item_by_binary(elements.cbegin(), elements.cend(), target);
 	}
 
 
@@ -152,9 +155,9 @@ namespace sundry
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if ((typeid(T) == typeid(char)) and !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-			return _find_item_by_binary(std::begin(elements), std::end(elements) - 1, target);
+			return _find_item_by_binary(std::cbegin(elements), std::cend(elements) - 1, target);
 		else
-			return _find_item_by_binary(std::begin(elements), std::end(elements), target);
+			return _find_item_by_binary(std::cbegin(elements), std::cend(elements), target);
 	}
 
 
@@ -162,6 +165,6 @@ namespace sundry
 	decltype(auto) find_item_by_binary(const TArray<T, N>& elements, const T& target)
 	{
 		// Перегруженная версия функции для обработки std::array.
-		return _find_item_by_binary(elements.begin(), elements.end(), target);
+		return _find_item_by_binary(elements.cbegin(), elements.cend(), target);
 	}
 }
