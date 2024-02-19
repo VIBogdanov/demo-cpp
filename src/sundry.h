@@ -1,4 +1,7 @@
 ﻿#pragma once
+#include <map>
+#include <utility>
+#include <vector>
 
 
 //****************************************** Public header *************************************************
@@ -35,14 +38,15 @@ namespace sundry
 			 find_item_by_binary(std::list<int>{ 1, 2, 3, 4, 5 }, 5) -> 4
 			 find_item_by_binary(std::deque<int>{ 1, 2, 3, 4, 5 }, 1) -> 0
 			 find_item_by_binary(std::string{ "abcdefgh" }, 'a') -> 0
+			 find_item_by_binary(std::array<int, 3>{ 1, 2, 3 }, 3) -> 2
 
 	@param (TContainer<T>&) Массив с данными контейнерного типа
 	@param (T&) Искомое значение
 
 	@return (int) В качестве входных данных могут быть использованы контейнеры из стандартной библиотеки.
 	*/
-	template <template <class...> typename TContainer, typename T>
-	decltype(auto) find_item_by_binary(const TContainer<T>&, const T&);
+	template <typename TContainer>
+	decltype(auto) find_item_by_binary(const TContainer&, const typename TContainer::value_type&);
 
 
 	/**
@@ -64,19 +68,27 @@ namespace sundry
 
 
 	/**
-	@brief Поиск элемента в массиве данных при помощи бинарного алгоритма. При поиске учитывается направление сортировки массива.
+	@brief Поиск в списке из чисел последовательного непрерывного интервала(-ов) чисел,
+	сумма которых равна искомому значению.
 
-	@details В качестве входных данных могут быть использованы  массивы из стандартной библиотеки.
+	@details Суть алгоритма выражена формулой: Sum1 - Sum2 = Target >> Sum1 - Target = Sum2
+	  - Вычислить все суммы от начала до текущей позиции.
+	  - Для каждой суммы вычислить Sum - Target
+	  - Найти полученное значение в списке сумм
+	  - Если пара найдена, извлечь индексы и составить диапазон
 
-	@example find_item_by_binary(std::array<int, 3>{ 1, 2, 3 }, 3) -> 2
+	@example find_intervals(std::vector<int>{ 1, -3, 4, 5 }, 9) -> std::vector<std::pair<int, int>>{ (2, 3) }
+			 find_intervals(std::vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> std::vector<std::pair<int, int>>{ (0, 1), (4, 6), (8, 9), (9, 10) }
 
-	@param (TArray<T, N>&) std::array-массив данных
-	@param (T&) Искомое значение
+	@param (TContainer&) Массив с данными контейнерного типа
+	@param (TContainer::value_type&) Искомое значение
 
-	@return (int) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	@return (std::vector<std::pair<int, int>>) Результирующий список диапазонов. Диапазоны задаются в виде
+		пары целых чисел, обозначающих индексы элементов списка - начальный и конечный индексы включительно.
+		Если ни один диапазон не найден, возвращается пустой список.
 	*/
-	template<template<typename T, std::size_t N> typename TArray, typename T, std::size_t N>
-	decltype(auto) find_item_by_binary(const TArray<T, N>&, const T&);
+	template <typename TContainer>
+	decltype(auto) find_intervals(const TContainer&, const typename TContainer::value_type&);
 }
 
 
@@ -101,18 +113,21 @@ namespace
 			return i_result;
 		}
 
-		// Определяем порядок сортировки исходного массива
-		// Для контейнера std::list<T> получение последнего элемента через *(last-1) не работает
+		// Для перемещения по данным используем итератор вместо индекса, чтобы
+		// была возможность работать с контейнерами, которые не поддерживают индексацию
 		auto iter_element = last;
-		std::advance(iter_element, -1);
+
+		// Метод std::advance поддерживает контейнеры как с индексацией (operator[]), так и без
+		std::advance(iter_element, -1); // Указатель на последний элемент данных
+
+		// Определяем порядок сортировки исходного массива
 		bool is_forward = std::greater_equal<>{}(*iter_element, *first);
 
 		// Стартуем с первого и последнего индекса массива одновременно
-		decltype(_size) i_first{ 0 }, i_middle{ 0 };
-		decltype(_size) i_last = (_size - 1);
+		decltype(_size) i_first{ 0 }, i_last = (_size - 1);
+		// i_middle - одновременно индекс середины диапазона поиска и индекс искомого значения
+		decltype(_size) i_middle{ 0 };
 
-		// Для перемещения по данным используем итератор вместо индекса, чтобы
-		// была возможность работать с контейнерами, которые не поддерживают индексацию
 		iter_element = first;
 		decltype(_size) iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
 
@@ -142,10 +157,11 @@ namespace
 //****************************************** Public code *************************************************
 namespace sundry
 {
-	template <template <class...> typename TContainer, typename T>
-	decltype(auto) find_item_by_binary(const TContainer<T>& elements, const T& target)
+	template <typename TContainer>
+	decltype(auto) find_item_by_binary(const TContainer& elements, const typename TContainer::value_type& target)
 	{
-		return _find_item_by_binary(elements.cbegin(), elements.cend(), target);
+		//Максимально обобщенный вариант для контейнеров
+		return _find_item_by_binary(std::cbegin(elements), std::cend(elements), target);
 	}
 
 
@@ -160,11 +176,41 @@ namespace sundry
 			return _find_item_by_binary(std::cbegin(elements), std::cend(elements), target);
 	}
 
-
-	template <template<typename T, std::size_t N> typename TArray, typename T, std::size_t N>
-	decltype(auto) find_item_by_binary(const TArray<T, N>& elements, const T& target)
+	template <typename TContainer>
+	decltype(auto) find_intervals(const TContainer& elements, const typename TContainer::value_type& target)
 	{
-		// Перегруженная версия функции для обработки std::array.
-		return _find_item_by_binary(elements.cbegin(), elements.cend(), target);
+		using TElement = typename TContainer::value_type;
+
+		std::vector<std::pair<int, int>> result_list;
+		std::map<TElement, std::vector<int>> sum_dict;
+
+		TElement sum{ 0 };
+		int idx{ 0 };
+
+		// Суммируем элементы списка по нарастающей
+		for (const auto& e : elements)
+		{
+			sum = std::move(sum) + e;
+
+			// Если на очередной итерации полученная сумма равна искомому значению,
+			// заносим диапазон от 0 до текущей позиции в результирующий список.
+			if (sum == target)
+				result_list.emplace_back(std::pair{ 0, idx });
+
+			//Ищем пару из уже вычисленных ранее сумм для значения (Sum - Target).
+			if (sum_dict.contains(sum - target))
+			{
+				// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
+				for (const auto& i : sum_dict.at(sum - target))
+					result_list.emplace_back(std::pair{ i + 1, idx });
+			}
+
+			// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
+			// У одной и той же суммы возможно несколько индексов
+			sum_dict[sum].emplace_back(idx);
+			++idx;
+		}
+
+		return result_list;
 	}
 }

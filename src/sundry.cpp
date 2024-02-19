@@ -3,7 +3,7 @@ SUNDRY.CPP
 Набор различных функций реализующие алгоритмы сортировки, поиска, фильтрации и т.п.
 */
 #include <algorithm>
-#include <math.h>
+#include <cmath>
 #include <utility>
 
 #include "sundry.h"
@@ -17,7 +17,7 @@ namespace sundry
 
 		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
 		std::pair<int, int> minmax_values = std::minmax(abs(number_a), abs(number_b));
-
+		
 		if (minmax_values.first) // Вычисляем только если делитель не равен нулю.
 		{
 			divisible = minmax_values.second;

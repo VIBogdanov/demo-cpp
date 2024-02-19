@@ -3,7 +3,7 @@ ASSISTOOLS.CPP
 Набор вспомогательных функций.
 */
 #include <vector>
-#include <math.h>
+#include <cmath>
 
 #include "assistools.h"
 
@@ -23,16 +23,15 @@ namespace assistools
 			// Разбиваем целое положительное число на отдельные цифры
 			while (_num > 0)
 			{
-				int _modulo = _num % 10;
-				result.push_back(_modulo);
-				_num = _num / 10;
+				result.push_back(_num % 10);
+				_num /= 10;
 			}
 		}
 
 		// В полученном списке цифры расположены в обратном порядке. Переворачиваем список.
 		if (result.size() > 1)
 		{
-			std::vector<int>::iterator it_left = result.begin(), it_right = result.end();
+			auto it_left = result.begin(), it_right = result.end();
 			while (it_left < it_right)
 			{
 				auto _tmp = *it_left;
