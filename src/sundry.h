@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -182,7 +183,7 @@ namespace sundry
 		using TElement = typename TContainer::value_type;
 
 		std::vector<std::pair<int, int>> result_list;
-		std::map<TElement, std::vector<int>> sum_dict;
+		std::multimap<TElement, int> sum_dict;
 
 		TElement sum{ 0 };
 		int idx{ 0 };
@@ -201,13 +202,14 @@ namespace sundry
 			if (sum_dict.contains(sum - target))
 			{
 				// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
-				for (const auto& i : sum_dict.at(sum - target))
-					result_list.emplace_back(std::pair{ i + 1, idx });
+				auto [first, last] = sum_dict.equal_range(sum - target);
+				for (; first != last; ++first)
+					result_list.emplace_back(std::make_pair(first->second + 1, idx));
 			}
 
 			// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
 			// У одной и той же суммы возможно несколько индексов
-			sum_dict[sum].emplace_back(idx);
+			sum_dict.emplace(sum, idx);
 			++idx;
 		}
 
