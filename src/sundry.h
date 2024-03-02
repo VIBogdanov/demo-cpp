@@ -44,7 +44,7 @@ namespace sundry
 	@param (TContainer<T>&) Массив с данными контейнерного типа
 	@param (T&) Искомое значение
 
-	@return (int) В качестве входных данных могут быть использованы контейнеры из стандартной библиотеки.
+	@return (long long) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template <typename TContainer>
 	decltype(auto) find_item_by_binary(const TContainer&, const typename TContainer::value_type&);
@@ -62,7 +62,7 @@ namespace sundry
 	@param (T(&)[N]) C-массив числовых и строковых данных
 	@param (T&) Искомое значение
 
-	@return (int) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	@return (long long) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template <typename T, std::size_t N>
 	decltype(auto) find_item_by_binary(const T(&)[N], const T&);
@@ -102,8 +102,10 @@ namespace
 		// Получаем размер массива данных
 		auto _size = std::distance(first, last);
 
+		using TIndex = decltype(_size);
+
 		// Возвращаемый индекс найденного значения
-		decltype(_size) i_result{ -1 };
+		long long i_result{ -1 };
 
 		switch (_size)
 		{
@@ -122,17 +124,17 @@ namespace
 		std::advance(iter_element, -1); // Указатель на последний элемент данных
 
 		// Определяем порядок сортировки исходного массива
-		bool is_forward = std::greater_equal<>{}(*iter_element, *first);
+		bool is_forward = std::greater_equal<decltype(*iter_element)>{}(*iter_element, *first);
 
 		// Стартуем с первого и последнего индекса массива одновременно
-		decltype(_size) i_first{ 0 }, i_last = (_size - 1);
+		TIndex i_first{ 0 }, i_last{ _size - 1 };
 		// i_middle - одновременно индекс середины диапазона поиска и индекс искомого значения
-		decltype(_size) i_middle{ 0 };
+		TIndex i_middle{ 0 };
 
 		iter_element = first;
-		decltype(_size) iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
+		TIndex iter_diff{ 0 }; //Текущее смещение для итератора в процессе поиска (вперед / назад)
 
-		while (i_first <= i_last and i_result < 0)
+		while (i_first <= i_last && i_result < 0)
 		{
 			// Вычисляем смещение итератора делением текущего диапазона поиска пополам
 			iter_diff = ((i_first + i_last) >> 1) - i_middle;
@@ -181,12 +183,13 @@ namespace sundry
 	decltype(auto) find_intervals(const TContainer& elements, const typename TContainer::value_type& target)
 	{
 		using TElement = typename TContainer::value_type;
+		using TIndex = typename TContainer::size_type;
 
-		std::vector<std::pair<int, int>> result_list;
-		std::multimap<TElement, int> sum_dict;
+		std::vector<std::pair<TIndex, TIndex>> result_list;
+		std::multimap<TElement, TIndex> sum_dict;
 
 		TElement sum{ 0 };
-		int idx{ 0 };
+		TIndex idx{ 0 };
 
 		// Суммируем элементы списка по нарастающей
 		for (const auto& e : elements)
