@@ -20,7 +20,7 @@ namespace
 
 		using TIndex = decltype(_size);
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
-		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");
+		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");  //Купируем тонкую ошибку
 
 		// Возвращаемый индекс найденного значения
 		TResult i_result{ -1 };

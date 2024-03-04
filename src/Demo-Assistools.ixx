@@ -57,38 +57,45 @@ export namespace assistools
 	@return vector<std::pair<int, int>>: Список пар с начальным и конечным индексами диапазона.
 	"""
 	*/
-	auto get_ranges_index(const int& data_size, const int& range_size = 0)
-		-> std::vector<std::pair<int, int>>
+	template <typename TNumber = int>
+		requires requires {
+		std::is_integral_v<TNumber>;
+		std::is_arithmetic_v<TNumber>;
+	}
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = 0)
+		-> std::vector<std::pair<TNumber, TNumber>>
 	{
 		auto _abs = [](const auto& x) { return (x < 0) ? -x : x;  };
 
-		std::vector<std::pair<int, int>> result;
+		std::vector<std::pair<TNumber, TNumber>> result;
 		// Сохраняем знак
-		int sign = (data_size < 0) ? -1 : 1;
+		TNumber sign = (data_size < 0) ? -1 : 1;
 		// Далее работаем без знака
-		auto _data_size = _abs(data_size);
-		auto _range_size = (range_size == 0) ? _data_size : _abs(range_size);
-		int idx = 0;
-		bool revers = false;
+		TNumber _data_size = _abs(data_size);
+		TNumber _range_size = (range_size == 0) ? _data_size : _abs(range_size);
+		TNumber idx = 0;
+
 		// Если размер диапазона отрицательный, переворачиваем список диапазонов
 		if (range_size < 0)
 		{
-			idx = _data_size - 1;
+			idx = std::move(_data_size) - 1;
 			_data_size = -1;
 			_range_size = -_range_size;
-			revers = true;
 		}
 		// Сравнение зависит от прямого или реверсного списка диапазонов.
-		auto _compare = [&revers](const auto& a, const auto& b) -> bool { return (revers) ? (a > b) : (a < b); };
+		auto _compare = [&range_size, &_data_size](const auto& x) -> bool
+			{ return (range_size < 0) ? (x > _data_size) : (x < _data_size); };
 
 		do
-		{
-			if (_compare((idx + _range_size), _data_size))
+		{	// При формировании списка диапазонов восстанавливаем знак
+			if (_compare(idx + _range_size))
 				result.emplace_back(idx * sign, (idx + _range_size) * sign);
 			else
 				result.emplace_back(idx * sign, _data_size * sign);
+
 			idx += _range_size;
-		} while (_compare(idx, _data_size));
+		}
+		while (_compare(idx));
 
 		return result;
 	};
