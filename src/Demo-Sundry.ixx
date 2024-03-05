@@ -1,8 +1,9 @@
 ﻿module;
 #include <algorithm>
-#include <unordered_map>
+#include <iterator>
 #include <memory>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 export module Demo:Sundry;
@@ -13,10 +14,10 @@ namespace
 {
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
 	auto _find_item_by_binary(const TIterator& first, const TIterator& last, const TItem& target)
-		-> std::make_signed_t<decltype(std::distance(first, last))>
+		-> std::make_signed_t<decltype(std::ranges::distance(first, last))>
 	{
 		// Получаем размер массива данных
-		auto _size = std::distance(first, last);
+		auto _size = std::ranges::distance(first, last);
 
 		using TIndex = decltype(_size);
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
@@ -71,7 +72,105 @@ namespace
 		}
 
 		return i_result;
+	};
+
+
+	//Объявление разно типовой переменной. Реализацию см. ниже в теле функции _find_item_by_interpolation()
+	namespace {
+		template <typename T>
+		T forward;
 	}
+
+	template <typename TIterator, typename TItem = typename TIterator::value_type>
+		requires (std::is_arithmetic_v<TItem>)
+	auto _find_item_by_interpolation(const TIterator& first, const TIterator& last, const TItem& target)
+		-> std::make_signed_t < std::iter_difference_t<TIterator>>
+	{
+		// Получаем размер массива данных
+		auto _size = std::ranges::distance(first, last);
+
+		using TIndex = std::iter_difference_t<TIterator>;
+		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
+		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");
+
+		// Возвращаемый индекс найденного значения
+		TResult i_result{ -1 };
+		// Отрабатываем крайние случаи
+		switch (_size)
+		{
+		case 1:
+			i_result = (std::equal_to<TItem>{}(*first, target)) ? 0 : -1;
+			[[fallthrough]];
+		case 0:
+			return i_result;
+		}
+
+		// Для перемещения по данным используем итератор вместо индекса, чтобы
+		// была возможность работать с контейнерами, которые не поддерживают индексацию
+		auto current_element = last;
+
+		// Метод std::advance поддерживает контейнеры как с индексацией (operator[]), так и без,
+		// а также позволяет работать с однонаправленными итераторами
+		std::advance(current_element, -1); // Указатель на последний элемент данных
+
+		/* Можно объединить под одним именем переменную разного типа
+		* Объявление см. перед функцией
+		* Определяем порядок сортировки исходного массива. */
+		forward<bool> = std::greater_equal<TItem>{}(*current_element, *first);
+		forward<TItem> = (forward<bool>) ? 1 : -1;
+
+		// Стартуем с первого и последнего индекса массива одновременно
+		TIndex i_first{ 0 }, i_last{ _size - 1 };
+		// Индекс искомого значения
+		TIndex i_current{ 0 };
+
+		//Инициализируем итераторы для диапазона поиска
+		auto first_element = first;
+		auto last_element = current_element;
+
+		// Возвращаем текущий указатель на первый элемент данных
+		current_element = first;
+		TIndex diff{ 0 };
+
+		while (i_first <= i_last && i_result < 0)
+		{
+			/* Если искомый элемент вне проверяемого диапазона, выходим
+			*  Эта проверка необходима, чтобы избежать зацикливания при неотсортированном исходном списке
+			*  При проверке учитывается направление сортировки исходных данных.  */
+			if (std::less<TItem>{}(forward<TItem> * target, forward<TItem> * (*first_element)) ||
+				std::greater<TItem>{}(forward<TItem> * target, forward<TItem> * (*last_element))
+				)
+				return i_result;
+
+			// Исключаем деление на 0, которое может возникнуть, если в искомом диапазоне элементы данных одинаковы
+			if (auto elements_diff = *last_element - *first_element)
+			{
+				//Сохраняем текущую позицию для будущего корректного вычисления смещения
+				diff = std::move(i_current);
+				// Пытаемся вычислить положение искомого элемента в списке.
+				i_current = static_cast<TIndex>(i_first + ((i_last - i_first) / elements_diff) * (target - *first_element));
+			}
+			else
+				return static_cast<TResult>((std::equal_to<TItem>{}(*first_element, target)) ? i_first : -1);
+
+			// Смещаем указатель на вычисленный индекс
+			diff = i_current - std::move(diff);
+			std::advance(current_element, diff);
+
+			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
+			if (std::equal_to<TItem>{}(*current_element, target))
+				i_result = static_cast<TResult>(i_current);
+			else
+				// Одновременно смещаем итератор и индекс
+				(std::greater<TItem>{}(*current_element, target))
+				? (forward<bool>) ? (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1)
+				: (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
+				: (forward<bool>) ? (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
+				: (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1);
+		}
+
+		return i_result;
+	};
 }
 
 
@@ -227,7 +326,7 @@ export namespace sundry
 			 find_item_by_binary({ -10.1, -20.2, -30.3, -40.4, -50.5, -60.6 }, -40.4) -> 3
 			 find_item_by_binary("abcdefgh", 'd') -> 3
 
-	@param elements - массив с данными контейнерного типа
+	@param elements - массив с данными
 	@param target - искомое значение
 
 	@return (long long) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
@@ -243,5 +342,74 @@ export namespace sundry
 			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
 			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), target);
+	};
+
+
+	/*
+	@brief Функция поиска заданного значения в одномерном числовом массиве контейнерного типа. В качестве алгоритма поиска
+	используется метод интерполяции.
+	
+	@details Алгоритм похож на бинарный поиск. Отличие в способе поиска срединного элемента.
+    При интерполяции производится попытка вычислить положение искомого элемента, а не просто поделить список
+    пополам.
+    Внимание!!! Входной массив данных обязательно должен быть отсортирован, иначе результат будет не определён.
+	Учитывается направление сортировки. Т.к. в алгоритме используются арифметические операции, список и искомое
+	значение должны быть числовыми. Строковые литералы не поддерживаются.
+
+	@example find_item_by_interpolation(std::vector<int>{ -1, -2, 3, 4, 5 }, 4) -> 3
+
+    @param elements - массив числовых данных для поиска
+    @param target - искомое значение
+
+    @return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	*/
+	template <typename T>
+	concept TypeContainer_a = requires {
+		!std::is_array_v<T>;
+		std::ranges::range<T>;
+		std::is_arithmetic_v<T>;
+	};
+
+	template <TypeContainer_a TContainer>
+	auto find_item_by_interpolation(const TContainer& elements, const typename TContainer::value_type& target)
+		-> std::make_signed_t<typename TContainer::size_type>
+	{
+		//Максимально обобщенный вариант для контейнеров
+		return _find_item_by_interpolation(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
+	};
+
+
+	/*
+	@brief Функция поиска заданного значения в одномерном числовом c-массиве. В качестве алгоритма поиска используется
+	метод интерполяции.
+
+	@details Алгоритм похож на бинарный поиск. Отличие в способе поиска срединного элемента.
+	При интерполяции производится попытка вычислить положение искомого элемента, а не просто поделить список
+	пополам.
+	Внимание!!! Входной массив данных обязательно должен быть отсортирован, иначе результат будет не определён.
+	Учитывается направление сортировки. Т.к. в алгоритме используются арифметические операции, список и искомое
+	значение должны быть числовыми. Строковые литералы не поддерживаются.
+
+	@example find_item_by_interpolation({ 1, 2, 3, 4, 5 }, 2) -> 1
+
+	@param elements - с-массив числовых данных для поиска
+	@param target - искомое значение
+
+	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	*/
+	template <typename T, std::size_t N>
+		requires requires {
+			std::is_array_v<T[N]>;
+			std::is_arithmetic_v<T>;
+		}
+	auto find_item_by_interpolation(const T(&elements)[N], const T& target)
+		-> std::make_signed_t<decltype(N)>
+	{
+		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
+		if ((typeid(T) == typeid(char)) and !*(std::end(elements) - 1))
+			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
+		else
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), target);
 	};
 }

@@ -31,7 +31,11 @@ int main()
 
 	cout << endl << " - Поиск элемента в массиве данных при помощи бинарного алгоритма." << endl;
 	cout << " find_item_by_binary({ -20, 30, 40, 50 }, 30) -> ";
-	cout << sundry::find_item_by_binary({ -20, 30, 40, 50 }, 30) << endl;
+	cout << sundry::find_item_by_binary(std::vector<int>{ -20, 30, 40, 50 }, 30) << endl;
+
+	cout << endl << " - Поиск элемента в массиве данных при помощи алгоритма интерполяции." << endl;
+	cout << " find_item_by_interpolation({ -1, -2, 3, 4, 5 }, 4) -> ";
+	cout << sundry::find_item_by_interpolation(std::vector<int>{ -1, -2, 3, 4, 5 }, 4) << endl;
 
 	{
 		cout << endl << " - Поиск в списке из чисел последовательного непрерывного интервала(-ов) чисел, сумма которых равна искомому значению." << endl;
