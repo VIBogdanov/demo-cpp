@@ -8,6 +8,7 @@
 #include <vector>
 export module Demo:Sundry;
 
+import :Assistools;
 
 //****************************************** Private code *************************************************
 namespace
@@ -170,6 +171,79 @@ namespace
 		}
 
 		return i_result;
+	};
+
+
+	/**
+	brief Вспомогательная подпрограмма для функции find_nearest_number.
+	
+	details Просматривает цифры левее текущей цифры исходного числа с целью поиска большего или
+    меньшего значения в зависимости от направления поиска. В случае успешного поиска, выполняет
+	перестановку цифр и сортирует правую часть числа по возрастанию или убыванию в зависимости от
+	направления поиска.
+
+    @param result_type - используется только для определения корректного типа возвращаемого значения
+    @param digits_list - массив цифр исходного числа
+	@param digit_iter - текущая позиция цифры, относительно которой выполняется перестановка
+	@param previous (bool) - Направление поиска: ближайшее большее или меньшее. True - меньшее, False - большее
+
+    @return  Возвращает найденное число или 0 в случае безуспешного поиска
+	*/
+	template <typename T>
+	concept TypeContainer_ia = requires {
+		std::is_integral_v<T>;
+		std::ranges::range<T>;
+		std::is_arithmetic_v<T>;
+	};
+
+	template <typename TResult, TypeContainer_ia TContainer, typename TIterator = typename TContainer::iterator>
+	auto _do_find_nearest(const TResult& result_type, const TContainer& digits_list, const TIterator& digit_iter, const bool& previous = true)
+		-> TResult
+	{
+		// Параметр result_type нужен только для определения корректного типа возвращаемого значения
+
+		TResult result{ 0 };
+
+		// создаем копию передаваемого списка, дабы не влиять на оригинальный список
+		TContainer _digits_list{ digits_list };
+		// Текущая цифра, с которой будем сравнивать, и ее индекс в списке
+		const auto& current_digit{ *digit_iter };
+		const auto& current_index{ std::ranges::distance(digits_list.begin(), digit_iter) };
+		// Сравниваем в зависимости от поиска большего или меньшего числа
+		auto _compare = [&previous, &current_digit](const auto& x) -> bool
+			{ return (previous) ? x > current_digit : x < current_digit; };
+
+		// Позиционируемся по индексу, а не по итератору, т.к. в списке возможны перестановки,
+		// что может сделать итераторы неопределенными.
+		// просматриваем все цифры левее текущей позиции
+		for (auto k{ current_index - 1 }; k >= 0; --k)
+		{
+			// Работаем с начальным итератором и смещением, т.к. не все контейнеры поддерживают индексацию (operator[])
+			// сравниваем с цифрой текущей позиции, учитывая направление поиска
+			if (_compare(*(_digits_list.begin() + k)))
+			{
+				// в случае успешного сравнения, переставляем местами найденную цифру с текущей
+				std::iter_swap(_digits_list.begin() + k, _digits_list.begin() + current_index);
+				// если первая цифра полученного числа после перестановки не равна 0,
+				// выполняем сортировку правой части числа
+				if (*_digits_list.begin() > 0)
+				{
+					++k;  //правая часть числа начинается со сдвигом от найденной позиции
+					// сортируем правую часть числа (по возрастанию или по убыванию) с учетом направления поиска
+					(previous)
+						? std::sort(_digits_list.begin() + k, _digits_list.end(), std::greater<int>()) //В обратном порядке
+						: std::sort(_digits_list.begin() + k, _digits_list.end());
+
+					// Собираем из массива цифр результирующее число
+					for (auto iter{ _digits_list.begin() }; iter != _digits_list.end(); ++iter)
+						result = std::move(result) * 10 + (*iter);
+
+					return result;
+				}
+			}
+		}
+
+		return result;
 	};
 }
 
@@ -345,7 +419,7 @@ export namespace sundry
 	};
 
 
-	/*
+	/**
 	@brief Функция поиска заданного значения в одномерном числовом массиве контейнерного типа. В качестве алгоритма поиска
 	используется метод интерполяции.
 	
@@ -379,7 +453,7 @@ export namespace sundry
 	};
 
 
-	/*
+	/**
 	@brief Функция поиска заданного значения в одномерном числовом c-массиве. В качестве алгоритма поиска используется
 	метод интерполяции.
 
@@ -411,5 +485,53 @@ export namespace sundry
 			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
 			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), target);
+	};
+
+
+	/**
+	@brief Функция поиска ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр.
+
+	@example find_nearest_number(273145) -> 271543
+			 find_nearest_number(273145, previous=False) -> 273154
+			 find_nearest_number(-273145) -> -273154
+
+    @param number - целое число, относительно которого осуществляется поиск. Допускаются отрицательные значения.
+	@param previous (bool) - Направление поиска: ближайшее меньшее или большее. По-умолчанию True - ближайшее меньшее.
+
+    @return Найденное число. Если поиск безуспешен, возвращается 0.
+	*/
+	template <typename TNumber = int>
+		requires requires {
+		std::is_integral_v<TNumber>;
+		std::is_arithmetic_v<TNumber>;
+	}
+	auto find_nearest_number(const TNumber& number, const bool& previous = true)
+		-> TNumber
+	{
+		TNumber result{ 0 };
+		// Сохраняем знак числа и определяем направление поиска (больше или меньше заданного числа)
+		const TNumber sign_number{ (number < 0) ? -1 : 1 };
+		const bool is_previous{ (number < 0) ? !previous : previous };
+		// Разбиваем заданное число на отдельные цифры
+		auto digits_list = assistools::inumber_to_digits(number);
+		// список для накопления результатов поиска
+		std::vector<TNumber> result_list{ };
+		// цикл перебора цифр заданного числа справа на лево (с хвоста к голове) кроме первой цифры
+		for (auto iter{ digits_list.end() - 1 }; iter != digits_list.begin(); --iter)
+			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
+			// result передаем только для того, чтобы получить корректный тип возвращаемого значения
+			if (auto res = _do_find_nearest(result, digits_list, iter, is_previous))
+				result_list.emplace_back(res);
+		// Если список результирующих чисел не пуст, находим наибольшее или наименьшее число
+		// в зависимости от направления поиска и восстанавливаем знак числа.
+		if (!result_list.empty())
+		{
+			auto result_iter = (is_previous)
+				? std::max_element(result_list.begin(), result_list.end())
+				: std::min_element(result_list.begin(), result_list.end());
+			result = (*result_iter) * sign_number;
+		}
+
+		return result;
 	};
 }

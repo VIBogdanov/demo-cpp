@@ -1,5 +1,6 @@
-﻿#include <iostream>
+﻿#include <algorithm>
 #include <clocale>
+#include <iostream>
 #include <vector>
 
 import Demo;
@@ -10,11 +11,13 @@ int main()
 {
 	setlocale(LC_CTYPE, "");
 
-	cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
-	cout << " inumber_to_digits(12340) -> ";
-	for (const auto& elem : assistools::inumber_to_digits(12340))
-		cout << elem << " ";
-	cout << endl;
+	{
+		cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
+		cout << " inumber_to_digits(12340) -> ";
+		auto res = assistools::inumber_to_digits(12340);
+		std::for_each(res.begin(), res.end(), [](const int n) { std::cout << n << ' '; });
+		cout << endl;
+	}
 
 	{
 		std::cout << std::endl << " - Формирует список индексов диапазонов, на которые можно разбить список заданной длины." << endl;
@@ -46,6 +49,10 @@ int main()
 		std::cout << std::endl;
 	}
 	
+
+	cout << endl << " - Поиск ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр." << endl;
+	cout << " find_nearest_number(273145) -> ";
+	cout << sundry::find_nearest_number(273145) << endl;
 
 	return 0;
 }

@@ -21,16 +21,17 @@ export namespace assistools
 		std::is_arithmetic_v<TNumber>;
 	}
 	auto inumber_to_digits(const TNumber& number = 0)
+		-> std::vector<int>
 	{
-		//using TNumber = std::remove_cvref_t<decltype(number)>;
-		TNumber _num = static_cast<TNumber>((number < 0) ? -number : number);  // Знак числа отбрасываем
+		TNumber _num = (number < 0) ? -number : number;  // Знак числа отбрасываем
 
 		// Разбиваем целое положительное число на отдельные цифры
-		std::vector<TNumber> result;
+		std::vector<int> result;
 		do
-			result.emplace(result.cbegin(), _num % 10);
+			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
 		while ((_num /= 10) != 0);
 
+		result.shrink_to_fit();
 		return result;
 	};
 
@@ -97,6 +98,7 @@ export namespace assistools
 		}
 		while (_compare(idx));
 
+		result.shrink_to_fit();
 		return result;
 	};
 }
