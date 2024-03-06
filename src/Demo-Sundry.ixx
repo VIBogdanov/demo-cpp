@@ -38,10 +38,7 @@ namespace
 
 		// Для перемещения по данным используем итератор вместо индекса, чтобы
 		// была возможность работать с контейнерами, которые не поддерживают индексацию
-		auto iter_element = last;
-
-		// Метод std::advance поддерживает контейнеры как с индексацией (operator[]), так и без
-		std::advance(iter_element, -1); // Указатель на последний элемент данных
+		auto iter_element = std::ranges::prev(last); // Указатель на последний элемент данных
 
 		// Определяем порядок сортировки исходного массива
 		const bool is_forward = std::greater_equal<TItem>{}(*iter_element, *first);
@@ -108,16 +105,14 @@ namespace
 
 		// Для перемещения по данным используем итератор вместо индекса, чтобы
 		// была возможность работать с контейнерами, которые не поддерживают индексацию
-		auto current_element = last;
-
-		// Метод std::advance поддерживает контейнеры как с индексацией (operator[]), так и без,
-		// а также позволяет работать с однонаправленными итераторами
-		std::advance(current_element, -1); // Указатель на последний элемент данных
+		//Инициализируем итераторы для диапазона поиска
+		auto first_element = first;
+		auto last_element = std::ranges::prev(last);
 
 		/* Можно объединить под одним именем переменную разного типа
 		* Объявление см. перед функцией
 		* Определяем порядок сортировки исходного массива. */
-		forward<bool> = std::greater_equal<TItem>{}(*current_element, *first);
+		forward<bool> = std::greater_equal<TItem>{}(*last_element, *first_element);
 		forward<TItem> = (forward<bool>) ? 1 : -1;
 
 		// Стартуем с первого и последнего индекса массива одновременно
@@ -125,12 +120,7 @@ namespace
 		// Индекс искомого значения
 		TIndex i_current{ 0 };
 
-		//Инициализируем итераторы для диапазона поиска
-		auto first_element = first;
-		auto last_element = current_element;
-
-		// Возвращаем текущий указатель на первый элемент данных
-		current_element = first;
+		auto current_element = first;
 		TIndex diff{ 0 };
 
 		while (i_first <= i_last && i_result < 0)
@@ -357,6 +347,7 @@ export namespace sundry
 			++idx;
 		}
 
+		result_list.shrink_to_fit();
 		return result_list;
 	};
 
@@ -533,5 +524,63 @@ export namespace sundry
 		}
 
 		return result;
+	};
+
+
+	/**
+	@brief Функция сортировки методом пузырька. Сортирует заданный список по месту.
+
+	@details В отличии от классического метода, функция за каждую итерацию одновременно ищет как максимальное
+	значение, так и минимальное. На следующей итерации диапазон поиска сокращается не на один элемент, а на два.
+	Кроме того, реализована сортировка как по возрастанию, так и по убыванию.
+
+    @param first - Итератор, указывающий на первый элемент данных.
+	@param last - Итератор, указывающий за последний элемент данных.
+	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
+	*/
+	template <typename TIterator>
+	void sort_by_bubble(TIterator first, TIterator last, const bool& revers = false)
+	{
+		// Устанавливаем итераторы на первый и последний элементы данных.
+		// Далее работаем с итераторами без прямого использование операторов +/-
+		// Все это позволяет сортировать практически любые контейнеры
+		auto it_start{ first };
+		auto it_end{ std::ranges::prev(last) };
+		// Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
+		bool is_swapped{ false };
+		// Сравниваем в зависимости от направления сортировки
+		auto _compare = [&revers](const auto& curr, const auto& next) -> bool
+			{ return (revers) ? curr < next : next < curr; };
+
+		while (it_start != it_end)
+		{
+			// До последнего значения не доходим. Это максимум текущего диапазона.
+			for (auto it_current{ it_start }; it_current != it_end; ++it_current)
+			{
+				auto it_next = std::ranges::next(it_current);
+				// Если текущий элемент больше следующего, то переставляем их местами.Это потенциальный максимум.
+				if (_compare(*it_current, *it_next))
+				{
+					std::iter_swap(it_current, it_next);
+					//Одновременно проверяем на потенциальный минимум, сравнивая с первым элементом текущего диапазона.
+					if (it_current != it_start && _compare(*it_start, *it_current))
+						std::iter_swap(it_current, it_start);
+					// Список пока не отсортирован, т.к. потребовались перестановки
+					is_swapped = true;
+				}
+			}
+			// После каждой итерации по элементам списка, сокращаем длину проверяемого диапазона на 2,
+			// т.к.на предыдущей итерации найдены одновременно минимум и максимум
+			if (is_swapped)
+			{
+				std::advance(it_start, 1);
+				if (it_start != it_end)
+					std::advance(it_end, -1);
+				is_swapped = false;
+			}
+			else
+				// Если за итерацию перестановок не было, то список уже отсортирован. Выходим из цикла
+				it_start = it_end;
+		}
 	};
 }

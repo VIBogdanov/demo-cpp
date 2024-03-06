@@ -48,11 +48,19 @@ int main()
 			std::cout << "(" << p.first << ", " << p.second << ") ";
 		std::cout << std::endl;
 	}
-	
 
 	cout << endl << " - Поиск ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр." << endl;
 	cout << " find_nearest_number(273145) -> ";
 	cout << sundry::find_nearest_number(273145) << endl;
+
+	{
+		cout << endl << " - Сортировки методом пузырька." << endl;
+		cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4 }) -> ";
+		std::vector<int> vec{ 2, 3, 1, 5, 4 };
+		sundry::sort_by_bubble(vec.begin(), vec.end());
+		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		cout << endl;
+	}
 
 	return 0;
 }
