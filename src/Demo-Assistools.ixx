@@ -29,7 +29,7 @@ export namespace assistools
 		std::vector<int> result;
 		do
 			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
-		while ((_num /= 10) != 0);
+		while (_num /= 10);
 
 		result.shrink_to_fit();
 		return result;

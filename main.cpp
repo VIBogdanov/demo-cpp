@@ -15,7 +15,7 @@ int main()
 		cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
 		cout << " inumber_to_digits(12340) -> ";
 		auto res = assistools::inumber_to_digits(12340);
-		std::for_each(res.begin(), res.end(), [](const int n) { std::cout << n << ' '; });
+		std::ranges::for_each(std::as_const(res), [](const int n) { std::cout << n << ' '; });
 		cout << endl;
 	}
 
@@ -58,7 +58,7 @@ int main()
 		cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4 }) -> ";
 		std::vector<int> vec{ 2, 3, 1, 5, 4 };
 		sundry::sort_by_bubble(vec.begin(), vec.end());
-		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		std::ranges::for_each(std::as_const(vec), [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
 
