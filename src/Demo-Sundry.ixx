@@ -196,20 +196,17 @@ namespace
 
 		// создаем копию передаваемого списка, дабы не влиять на оригинальный список
 		TContainer _digits_list{ digits_list };
-		// Текущая цифра, с которой будем сравнивать, и ее индекс в списке
-		const auto _digit_index{ std::ranges::distance(digits_list.begin(), digit_iter) };
-		const auto _digit_iter{ std::ranges::next(_digits_list.begin(), _digit_index)};
+		// Текущая цифра, с которой будем сравнивать
+		const auto _digit_iter{ std::ranges::next(_digits_list.rbegin(),
+								std::ranges::distance(digits_list.rbegin(), digit_iter)) };
 		// Сравниваем значения итераторов в зависимости от направления поиска: большего или меньшего числа
 		auto _compare = [previous, _digit_iter](const auto x) -> bool
 			{ return (previous) ? *x > *_digit_iter : *x < *_digit_iter; };
 
-		// Позиционируемся по индексу, а не по итератору, т.к. в списке возможны перестановки,
-		// что может сделать итераторы неопределенными. Плюс необходимо обработать первый элемент списка.
 		// Просматриваем все цифры левее текущей позиции.
-		for (auto i{ _digit_index - 1}; i >= 0; --i)
+		for (auto current_iter{ std::ranges::next(_digit_iter) };
+			current_iter != _digits_list.rend(); ++current_iter)
 		{
-			// Работаем с начальным итератором и смещением, т.к. не все контейнеры поддерживают индексацию (operator[])
-			auto current_iter{ std::ranges::next(_digits_list.begin(), i) };
 			// сравниваем с цифрой текущей позиции, учитывая направление поиска
 			if (_compare(current_iter))
 			{
@@ -219,19 +216,17 @@ namespace
 				// выполняем сортировку правой части числа
 				if (*_digits_list.begin() > 0)
 				{
-					// сортируем правую от найденной позиции часть числа (по возрастанию или по убыванию) с учетом направления поиска
-					// правая часть начинается со сдвигом от найденной позиции
-					(previous)
-						? std::sort(std::ranges::next(current_iter), _digits_list.end(),
-							[](const auto& a, const auto& b) -> bool { return b < a; }) //В обратном порядке
-						: std::sort(std::ranges::next(current_iter), _digits_list.end());
+					// сортируем правую от найденной позиции часть числа (по возрастанию или по убыванию)
+					// с учетом направления поиска
+					std::sort(_digits_list.rbegin(), current_iter,
+								[previous](const auto& a, const auto& b) -> bool
+								{ return (previous) ? a < b : b < a; });
 
 					// Собираем из массива цифр результирующее число
 					std::ranges::for_each(std::as_const(_digits_list),
-						[&result](const auto& d) -> void { result = std::move(result) * 10 + d; });
-
-					return result;
+						[&result](const auto& d) -> void { result = result * 10 + d; });
 				}
+				return result;
 			}
 		}
 
@@ -272,13 +267,11 @@ export namespace sundry
 	auto get_common_divisor(const TNumber& number_a = 0, const TNumber& number_b = 0)
 		-> TNumber
 	{
-		using TMinMax = std::ranges::minmax_result<TNumber>;
-
 		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
-		auto [divisor, divisible] = static_cast<TMinMax>(std::ranges::minmax(std::abs(number_a), std::abs(number_b)));
+		auto [divisor, divisible] = std::ranges::minmax({ std::abs(number_a), std::abs(number_b) });
 
 		if (divisor) // Вычисляем только если делитель не равен нулю.
-			while (auto&& _div{ divisible % divisor }) {
+			while (auto _div{ divisible % divisor }) {
 				divisible = std::move(divisor);
 				divisor = std::move(_div);
 			}
@@ -484,7 +477,7 @@ export namespace sundry
 	@brief Функция поиска ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр.
 
 	@example find_nearest_number(273145) -> 271543
-			 find_nearest_number(273145, previous=False) -> 273154
+			 find_nearest_number(273145, previous=false) -> 273154
 			 find_nearest_number(-273145) -> -273154
 
     @param number - целое число, относительно которого осуществляется поиск. Допускаются отрицательные значения.
@@ -509,7 +502,7 @@ export namespace sundry
 		// список для накопления результатов поиска
 		std::vector<TNumber> result_list{ };
 		// цикл перебора цифр заданного числа справа на лево (с хвоста к голове) кроме первой цифры
-		for (auto it_digit{ std::ranges::prev(digits_list.end()) }; it_digit != digits_list.begin(); --it_digit)
+		for (auto it_digit{ digits_list.rbegin() }; it_digit != std::ranges::prev(digits_list.rend()); ++it_digit)
 			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
 			// result передаем только для того, чтобы получить корректный тип возвращаемого значения
 			if (auto res = _do_find_nearest(result, digits_list, it_digit, is_previous))
@@ -543,22 +536,22 @@ export namespace sundry
 	void sort_by_bubble(TIterator first, TIterator last, const bool& revers = false)
 	{
 		// Устанавливаем итераторы на первый и последний элементы данных.
-		// Далее работаем с итераторами без прямого использование операторов +/-
+		// Далее работаем с итераторами без прямого использование операторов +/- и [][
 		// Все это позволяет сортировать практически любые контейнеры
 		auto it_start{ first };
 		auto it_end{ std::ranges::prev(last) };
 		// Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
 		bool is_swapped{ false };
 		// Сравниваем в зависимости от направления сортировки
-		auto _compare = [&revers](const auto& curr, const auto& next) -> bool
+		auto _compare = [revers](const auto& curr, const auto& next) -> bool
 			{ return (revers) ? curr < next : next < curr; };
 
 		while (it_start != it_end)
 		{
 			// До последнего значения не доходим. Это максимум текущего диапазона.
-			for (auto it_current{ it_start }; it_current != it_end; ++it_current)
+			for (auto it_current{ it_start }, it_next{ std::ranges::next(it_current) };
+				it_current != it_end; ++it_current, ++it_next)
 			{
-				auto it_next{ std::ranges::next(it_current) };
 				// Если текущий элемент больше следующего, то переставляем их местами.Это потенциальный максимум.
 				if (_compare(*it_current, *it_next))
 				{

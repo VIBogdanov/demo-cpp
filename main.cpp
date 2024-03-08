@@ -15,7 +15,7 @@ int main()
 		cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
 		cout << " inumber_to_digits(12340) -> ";
 		auto res = assistools::inumber_to_digits(12340);
-		std::ranges::for_each(std::as_const(res), [](const int n) { std::cout << n << ' '; });
+		std::ranges::for_each(std::as_const(res), [](const auto& n) { std::cout << n << ' '; });
 		cout << endl;
 	}
 
@@ -43,8 +43,8 @@ int main()
 	{
 		cout << endl << " - Поиск в списке из чисел последовательного непрерывного интервала(-ов) чисел, сумма которых равна искомому значению." << endl;
 		cout << " find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> ";
-		auto result = sundry::find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0);
-		for (const auto& p : result)
+		auto res = sundry::find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0);
+		for (const auto& p : res)
 			std::cout << "(" << p.first << ", " << p.second << ") ";
 		std::cout << std::endl;
 	}
