@@ -2,6 +2,9 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <optional>
+#include <queue>
+#include <stack>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -15,10 +18,10 @@ namespace
 {
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
 	auto _find_item_by_binary(const TIterator& first, const TIterator& last, const TItem& target)
-		-> std::make_signed_t<decltype(std::ranges::distance(first, last))>
+		-> std::make_signed_t < std::iter_difference_t<TIterator>>
 	{
 		// Получаем размер массива данных
-		auto _size = std::ranges::distance(first, last);
+		auto _size{ std::ranges::distance(first, last) };
 
 		using TIndex = decltype(_size);
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
@@ -30,7 +33,7 @@ namespace
 		switch (_size)
 		{
 		case 1:
-			i_result = (std::equal_to<TItem>{}(*first, target)) ? 0 : -1;
+			i_result = (*first == target) ? 0 : -1;
 			[[fallthrough]];
 		case 0:
 			return i_result;
@@ -41,7 +44,7 @@ namespace
 		auto iter_element{ std::ranges::prev(last) }; // Указатель на последний элемент данных
 
 		// Определяем порядок сортировки исходного массива
-		const bool is_forward = std::greater_equal<TItem>{}(*iter_element, *first);
+		const bool is_forward{ *first <= *iter_element };
 
 		// Стартуем с первого и последнего индекса массива одновременно
 		TIndex i_first{ 0 }, i_last{ _size - 1 };
@@ -61,12 +64,12 @@ namespace
 			std::advance(iter_element, iter_diff);
 
 			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
-			if (std::equal_to<TItem>{}(*iter_element, target))
+			if (*iter_element == target)
 				i_result = static_cast<TResult>(i_middle);
 			else
-				(std::greater<TItem>{}(*iter_element, target))
-				? (is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1
-				: (is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
+				(target < *iter_element)
+					? (is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1
+					: (is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
 		}
 
 		return i_result;
@@ -76,7 +79,7 @@ namespace
 	//Объявление разно типовой переменной. Реализацию см. ниже в теле функции _find_item_by_interpolation()
 	namespace {
 		template <typename T>
-		T forward;
+		T is_forward;
 	}
 
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
@@ -85,7 +88,7 @@ namespace
 		-> std::make_signed_t < std::iter_difference_t<TIterator>>
 	{
 		// Получаем размер массива данных
-		auto _size = std::ranges::distance(first, last);
+		auto _size{ std::ranges::distance(first, last) };
 
 		using TIndex = std::iter_difference_t<TIterator>;
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
@@ -97,7 +100,7 @@ namespace
 		switch (_size)
 		{
 		case 1:
-			i_result = (std::equal_to<TItem>{}(*first, target)) ? 0 : -1;
+			i_result = (*first == target) ? 0 : -1;
 			[[fallthrough]];
 		case 0:
 			return i_result;
@@ -112,8 +115,8 @@ namespace
 		/* Можно объединить под одним именем переменные разного типа
 		* Объявление см. перед функцией
 		* Определяем порядок сортировки исходного массива. */
-		forward<bool> = std::greater_equal<TItem>{}(*last_element, *first_element);
-		forward<TItem> = (forward<bool>) ? 1 : -1;
+		is_forward<bool> = (*first_element <= *last_element);
+		is_forward<TItem> = (is_forward<bool>) ? 1 : -1;
 
 		// Стартуем с первого и последнего индекса массива одновременно
 		TIndex i_first{ 0 }, i_last{ _size - 1 };
@@ -128,8 +131,8 @@ namespace
 			/* Если искомый элемент вне проверяемого диапазона, выходим
 			*  Эта проверка необходима, чтобы избежать зацикливания при неотсортированном исходном списке
 			*  При проверке учитывается направление сортировки исходных данных.  */
-			if (std::less<TItem>{}(forward<TItem> * target, forward<TItem> * (*first_element)) ||
-				std::greater<TItem>{}(forward<TItem> * target, forward<TItem> * (*last_element))
+			if ((is_forward<TItem> * target < is_forward<TItem> * (*first_element)) ||
+				(is_forward<TItem> * (*last_element) < is_forward<TItem> * target)
 				)
 				return i_result;
 
@@ -139,25 +142,25 @@ namespace
 				//Сохраняем текущую позицию для будущего корректного вычисления смещения
 				diff = std::move(i_current);
 				// Пытаемся вычислить положение искомого элемента в списке.
-				i_current = static_cast<TIndex>(i_first + ((i_last - i_first) / elements_diff) * (target - *first_element));
+				i_current = static_cast<TIndex>(i_first + ((i_last - i_first) / elements_diff) * (target - (*first_element)));
 			}
 			else
-				return static_cast<TResult>((std::equal_to<TItem>{}(*first_element, target)) ? i_first : -1);
+				return static_cast<TResult>((*first_element == target) ? i_first : -1);
 
 			// Смещаем указатель на вычисленный индекс
 			diff = i_current - std::move(diff);
 			std::advance(current_element, diff);
 
 			// Сужаем диапазон поиска в зависимости от результата сравнения и от направления сортировки
-			if (std::equal_to<TItem>{}(*current_element, target))
+			if (*current_element == target)
 				i_result = static_cast<TResult>(i_current);
 			else
 				// Одновременно смещаем итератор и индекс
-				(std::greater<TItem>{}(*current_element, target))
-				? (forward<bool>) ? (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1)
-				: (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
-				: (forward<bool>) ? (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
-				: (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1);
+				(target < *current_element)
+					? (is_forward<bool>) ? (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1)
+										 : (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
+					: (is_forward<bool>) ? (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
+										 : (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1);
 		}
 
 		return i_result;
@@ -187,7 +190,10 @@ namespace
 	};
 
 	template <typename TResult, TypeContainer_ia TContainer, typename TIterator = typename TContainer::iterator>
-	auto _do_find_nearest(const TResult& result_type, const TContainer& digits_list, const TIterator& digit_iter, const bool& previous = true)
+	auto _do_find_nearest(const TResult& result_type,
+						  const TContainer& digits_list,
+						  const TIterator digit_iter,
+						  const bool& previous = true)
 		-> TResult
 	{
 		// Параметр result_type нужен только для определения корректного типа возвращаемого значения
@@ -198,10 +204,10 @@ namespace
 		TContainer _digits_list{ digits_list };
 		// Текущая цифра, с которой будем сравнивать
 		const auto _digit_iter{ std::ranges::next(_digits_list.rbegin(),
-								std::ranges::distance(digits_list.rbegin(), digit_iter)) };
+									std::ranges::distance(digits_list.rbegin(), digit_iter)) };
 		// Сравниваем значения итераторов в зависимости от направления поиска: большего или меньшего числа
-		auto _compare = [previous, _digit_iter](const auto x) -> bool
-			{ return (previous) ? *x > *_digit_iter : *x < *_digit_iter; };
+		auto _compare = [previous, _digit_iter](const auto _current_iter) -> bool
+						{ return (previous) ? *_current_iter > *_digit_iter : *_current_iter < *_digit_iter; };
 
 		// Просматриваем все цифры левее текущей позиции.
 		for (auto current_iter{ std::ranges::next(_digit_iter) };
@@ -216,15 +222,15 @@ namespace
 				// выполняем сортировку правой части числа
 				if (*_digits_list.begin() > 0)
 				{
-					// сортируем правую от найденной позиции часть числа (по возрастанию или по убыванию)
+					// сортируем правую (от найденной позиции) часть числа (по возрастанию или по убыванию)
 					// с учетом направления поиска
 					std::sort(_digits_list.rbegin(), current_iter,
 								[previous](const auto& a, const auto& b) -> bool
-								{ return (previous) ? a < b : b < a; });
+									{ return (previous) ? a < b : b < a; });
 
 					// Собираем из массива цифр результирующее число
 					std::ranges::for_each(std::as_const(_digits_list),
-						[&result](const auto& d) -> void { result = result * 10 + d; });
+						[&result](const auto& d) -> void { result = result * 10 + static_cast<TResult>(d); });
 				}
 				return result;
 			}
@@ -265,7 +271,7 @@ export namespace sundry
 		std::is_arithmetic_v<TNumber>;
 	}
 	auto get_common_divisor(const TNumber& number_a = 0, const TNumber& number_b = 0)
-		-> TNumber
+		-> std::optional<TNumber>
 	{
 		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
 		auto [divisor, divisible] = std::ranges::minmax({ std::abs(number_a), std::abs(number_b) });
@@ -278,7 +284,7 @@ export namespace sundry
 		else
 			divisor = std::move(divisible);
 
-		return divisor;
+		return (divisor) ? std::optional<TNumber>{divisor} : std::nullopt;
 	};
 
 
@@ -396,7 +402,7 @@ export namespace sundry
 		-> std::make_signed_t<decltype(N)>
 	{
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
-		if ((typeid(T) == typeid(char)) and !*(std::end(elements) - 1))
+		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
 			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
@@ -465,7 +471,7 @@ export namespace sundry
 		-> std::make_signed_t<decltype(N)>
 	{
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
-		if ((typeid(T) == typeid(char)) and !*(std::end(elements) - 1))
+		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
 			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
@@ -536,15 +542,15 @@ export namespace sundry
 	void sort_by_bubble(TIterator first, TIterator last, const bool& revers = false)
 	{
 		// Устанавливаем итераторы на первый и последний элементы данных.
-		// Далее работаем с итераторами без прямого использование операторов +/- и [][
+		// Далее работаем с итераторами без прямого использование операторов +/- и []
 		// Все это позволяет сортировать практически любые контейнеры
 		auto it_start{ first };
 		auto it_end{ std::ranges::prev(last) };
 		// Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
 		bool is_swapped{ false };
 		// Сравниваем в зависимости от направления сортировки
-		auto _compare = [revers](const auto& curr, const auto& next) -> bool
-			{ return (revers) ? curr < next : next < curr; };
+		auto _compare = [revers](const auto curr, const auto next) -> bool
+			{ return (revers) ? *curr < *next : *next < *curr; };
 
 		while (it_start != it_end)
 		{
@@ -553,11 +559,11 @@ export namespace sundry
 				it_current != it_end; ++it_current, ++it_next)
 			{
 				// Если текущий элемент больше следующего, то переставляем их местами.Это потенциальный максимум.
-				if (_compare(*it_current, *it_next))
+				if (_compare(it_current, it_next))
 				{
 					std::iter_swap(it_current, it_next);
 					//Одновременно проверяем на потенциальный минимум, сравнивая с первым элементом текущего диапазона.
-					if (it_current != it_start && _compare(*it_start, *it_current))
+					if (it_current != it_start && _compare(it_start, it_current))
 						std::iter_swap(it_start, it_current);
 					// Список пока не отсортирован, т.к. потребовались перестановки
 					is_swapped = true;
@@ -575,6 +581,78 @@ export namespace sundry
 			else
 				// Если за итерацию перестановок не было, то список уже отсортирован. Выходим из цикла
 				it_start = it_end;
+		}
+	};
+
+
+	/**
+	@brief Функция сортировки методом слияния. Сортирует заданный список по месту.
+
+	@details В отличии от классического метода не использует рекурсивные вызовы и не создает каскад списков.
+	Вместо этого создается список индексов для диапазонов сортировки, по которым происходит отбор
+    значений из списка источника и их сортировка.
+
+	@param first - Итератор, указывающий на первый элемент данных.
+	@param last - Итератор, указывающий за последний элемент данных.
+	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
+	*/
+	template <typename TIterator>
+	void sort_by_merge(TIterator first, TIterator last, const bool& revers = false)
+	{
+		// Получаем размер массива данных
+		auto _size = std::ranges::distance(first, last);
+		if (_size < 2) return;
+
+		using TIndex = decltype(_size);
+		using TItem = typename TIterator::value_type;
+		using TTuple = std::tuple<TIndex, TIndex, TIndex>;
+
+		// Итоговый список индесов, по которым сортируется исходный список данных
+		std::stack<TTuple> query_work;
+		// Временный буфер для деления диапазонов индексов пополам
+		std::queue<TTuple> query_buff;
+		// Инициализируем буферную очередь исходным списком, деленным пополам
+		query_buff.emplace(0, _size >> 1, _size);
+		// Далее делим пополам обе половины до тех пор, пока в каждой половине не останется по одному элементу
+		while (!query_buff.empty())
+		{
+			auto [i_first, i_middle, i_last] = query_buff.front();
+			query_buff.pop();
+			// Делим пополам левую часть
+			if (auto i_offset = ((i_middle - i_first) >> 1))
+				query_buff.emplace(i_first, (i_first + i_offset), i_middle);
+			// Делим пополам правую часть
+			if (auto i_offset = ((i_last - i_middle) >> 1))
+				query_buff.emplace(i_middle, (i_middle + i_offset), i_last);
+			// Результирующая список индексов будет содержать индексы диапазонов для каждой из половин
+			query_work.emplace(i_first, i_middle, i_last);
+		}
+		// При сравнении учитываем порядок сортировки
+		auto _compare = [revers](const auto& iter_a, const auto& iter_b) -> bool
+			{ return revers ? *iter_b < *iter_a : *iter_a < *iter_b; };
+		// Сортируем все полученные половины
+		while (!query_work.empty())
+		{
+			// Выбираем из очереди диапазоны начиная с меньших
+			auto [i_first, i_middle, i_last] = query_work.top();
+			query_work.pop();
+			// Формируем временные списки с данными для каждой половины
+			std::vector<TItem> left_list{ std::ranges::next(first, i_first), std::ranges::next(first, i_middle) };
+			std::vector<TItem> right_list{ std::ranges::next(first, i_middle), std::ranges::next(first, i_last) };
+			// Итерируемся по временным спискам и по исходному списку, сортируя его
+			auto it_current = std::ranges::next(first, i_first);
+			auto it_left = left_list.begin();
+			auto it_right = right_list.begin();
+			// Поэлементно сравниваем половины и сортируем исходный список
+			while ((it_left != left_list.end()) && (it_right != right_list.end()))
+				(_compare(it_left, it_right))
+				? *it_current++ = *it_left++
+				: *it_current++ = *it_right++;
+			// Добавляем в результирующий список "хвосты", оставшиеся от половинок
+			if (it_left != left_list.end())
+				std::ranges::copy(it_left, left_list.end(), it_current);
+			else if (it_right != right_list.end())
+				std::ranges::copy(it_right, right_list.end(), it_current);
 		}
 	};
 }

@@ -20,10 +20,10 @@ export namespace assistools
 		std::is_integral_v<TNumber>;
 		std::is_arithmetic_v<TNumber>;
 	}
-	auto inumber_to_digits(const TNumber& number = 0)
+	auto inumber_to_digits(const TNumber& number = 0 /*Integer number*/)
 		-> std::vector<int>
 	{
-		TNumber _num = (number < 0) ? -number : number;  // Знак числа отбрасываем
+		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
 
 		// Разбиваем целое положительное число на отдельные цифры
 		std::vector<int> result;
@@ -70,11 +70,11 @@ export namespace assistools
 
 		std::vector<std::pair<TNumber, TNumber>> result;
 		// Сохраняем знак
-		TNumber sign = (data_size < 0) ? -1 : 1;
+		TNumber sign{ (data_size < 0) ? -1 : 1 };
 		// Далее работаем без знака
-		TNumber _data_size = _abs(data_size);
-		TNumber _range_size = (range_size == 0) ? _data_size : _abs(range_size);
-		TNumber idx = 0;
+		TNumber _data_size{ _abs(data_size) };
+		TNumber _range_size{ (range_size == 0) ? _data_size : _abs(range_size) };
+		TNumber idx{ 0 };
 
 		// Если размер диапазона отрицательный, переворачиваем список диапазонов
 		if (range_size < 0)
@@ -88,13 +88,14 @@ export namespace assistools
 			{ return (range_size < 0) ? (x > _data_size) : (x < _data_size); };
 
 		do
-		{	// При формировании списка диапазонов восстанавливаем знак
-			if (_compare(idx + _range_size))
-				result.emplace_back(idx * sign, (idx + _range_size) * sign);
-			else
-				result.emplace_back(idx * sign, _data_size * sign);
+		{	
+			auto rdx{ idx + _range_size };
+			// При формировании списка диапазонов восстанавливаем знак
+			(_compare(rdx))
+				? result.emplace_back(idx * sign, rdx * sign)
+				: result.emplace_back(idx * sign, _data_size * sign);
 
-			idx += _range_size;
+			idx = std::move(rdx);
 		}
 		while (_compare(idx));
 

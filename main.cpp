@@ -15,22 +15,28 @@ int main()
 		cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
 		cout << " inumber_to_digits(12340) -> ";
 		auto res = assistools::inumber_to_digits(12340);
-		std::ranges::for_each(std::as_const(res), [](const auto& n) { std::cout << n << ' '; });
+		std::ranges::for_each(std::as_const(res), [](const auto& n) { cout << n << ' '; });
 		cout << endl;
 	}
 
 	{
-		std::cout << std::endl << " - Формирует список индексов диапазонов, на которые можно разбить список заданной длины." << endl;
-		std::cout << " get_ranges_index(50, 10) -> ";
+		cout << endl << " - Формирует список индексов диапазонов, на которые можно разбить список заданной длины." << endl;
+		cout << " get_ranges_index(50, 10) -> ";
 		auto res = assistools::get_ranges_index(50, 10);
 		for (const auto& [_first, _last] : res)
-			std::cout << "[" << _first << ", " << _last << ") ";
-		std::cout << std::endl;
+			cout << "[" << _first << ", " << _last << ") ";
+		cout << endl;
 	}
 	
-	cout << endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << endl;
-	cout << " get_common_divisor(20, 12) -> ";
-	cout << sundry::get_common_divisor(20, 12) << endl;
+	{
+		cout << endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << endl;
+		cout << " get_common_divisor(20, 12) -> ";
+		if (auto res = sundry::get_common_divisor(20, 12))
+			cout << res.value();
+		else
+			cout << "Невозможно вычислить общий делитель!";
+		cout << endl;
+	}
 
 	cout << endl << " - Поиск элемента в массиве данных при помощи бинарного алгоритма." << endl;
 	cout << " find_item_by_binary({ -20, 30, 40, 50 }, 30) -> ";
@@ -45,8 +51,8 @@ int main()
 		cout << " find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> ";
 		auto res = sundry::find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0);
 		for (const auto& p : res)
-			std::cout << "(" << p.first << ", " << p.second << ") ";
-		std::cout << std::endl;
+			cout << "(" << p.first << ", " << p.second << ") ";
+		cout << endl;
 	}
 
 	cout << endl << " - Поиск ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр." << endl;
@@ -56,9 +62,18 @@ int main()
 	{
 		cout << endl << " - Сортировки методом пузырька." << endl;
 		cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4 }) -> ";
-		std::vector<int> vec{ 2, 3, 1, 5, 4 };
+		vector<int> vec{ 2, 3, 1, 5, 4 };
 		sundry::sort_by_bubble(vec.begin(), vec.end());
-		std::ranges::for_each(std::as_const(vec), [](const auto& n) { std::cout << n << ", "; });
+		std::ranges::for_each(std::as_const(vec), [](const auto& n) { cout << n << ", "; });
+		cout << endl;
+	}
+
+	{
+		cout << endl << " - Сортировка методом слияния." << endl;
+		cout << " sort_by_merge(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
+		vector<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_merge(vec.begin(), vec.end());
+		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
 
