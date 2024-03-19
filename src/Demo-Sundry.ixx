@@ -600,33 +600,37 @@ export namespace sundry
 	void sort_by_merge(TIterator first, TIterator last, const bool& revers = false)
 	{
 		// Получаем размер массива данных
-		auto _size = std::ranges::distance(first, last);
+		auto _size{ std::ranges::distance(first, last) };
 		if (_size < 2) return;
 
 		using TIndex = decltype(_size);
 		using TItem = typename TIterator::value_type;
 		using TTuple = std::tuple<TIndex, TIndex, TIndex>;
 
-		// Итоговый список индесов, по которым сортируется исходный список данных
+		// Итоговый список индексов, по которым сортируется исходный список данных
 		std::stack<TTuple> query_work;
-		// Временный буфер для деления диапазонов индексов пополам
-		std::queue<TTuple> query_buff;
-		// Инициализируем буферную очередь исходным списком, деленным пополам
-		query_buff.emplace(0, _size >> 1, _size);
-		// Далее делим пополам обе половины до тех пор, пока в каждой половине не останется по одному элементу
-		while (!query_buff.empty())
-		{
-			auto [i_first, i_middle, i_last] = query_buff.front();
-			query_buff.pop();
-			// Делим пополам левую часть
-			if (auto i_offset = ((i_middle - i_first) >> 1))
-				query_buff.emplace(i_first, (i_first + i_offset), i_middle);
-			// Делим пополам правую часть
-			if (auto i_offset = ((i_last - i_middle) >> 1))
-				query_buff.emplace(i_middle, (i_middle + i_offset), i_last);
-			// Результирующая список индексов будет содержать индексы диапазонов для каждой из половин
-			query_work.emplace(i_first, i_middle, i_last);
+
+		{ // Ограничиваем область действия query_buff
+			// Временный буфер для деления диапазонов индексов пополам
+			std::queue<TTuple> query_buff;
+			// Инициализируем буферную очередь исходным списком, деленным пополам
+			query_buff.emplace(0, _size >> 1, _size);
+			// Далее делим пополам обе половины до тех пор, пока в каждой половине не останется по одному элементу
+			while (!query_buff.empty())
+			{
+				auto [i_first, i_middle, i_last] = query_buff.front();
+				query_buff.pop();
+				// Делим пополам левую часть
+				if (auto i_offset{ (i_middle - i_first) >> 1 })
+					query_buff.emplace(i_first, (i_first + i_offset), i_middle);
+				// Делим пополам правую часть
+				if (auto i_offset{ (i_last - i_middle) >> 1 })
+					query_buff.emplace(i_middle, (i_middle + i_offset), i_last);
+				// Результирующий список индексов будет содержать индексы диапазонов для каждой половины
+				query_work.emplace(i_first, i_middle, i_last);
+			}
 		}
+
 		// При сравнении учитываем порядок сортировки
 		auto _compare = [revers](const auto& iter_a, const auto& iter_b) -> bool
 			{ return revers ? *iter_b < *iter_a : *iter_a < *iter_b; };
@@ -636,23 +640,23 @@ export namespace sundry
 			// Выбираем из очереди диапазоны начиная с меньших
 			auto [i_first, i_middle, i_last] = query_work.top();
 			query_work.pop();
-			// Формируем временные списки с данными для каждой половины
+			// Формируем временный список с данными только  для левой половины. Правая в исходном списке
 			std::vector<TItem> left_list{ std::ranges::next(first, i_first), std::ranges::next(first, i_middle) };
-			std::vector<TItem> right_list{ std::ranges::next(first, i_middle), std::ranges::next(first, i_last) };
-			// Итерируемся по временным спискам и по исходному списку, сортируя его
-			auto it_current = std::ranges::next(first, i_first);
-			auto it_left = left_list.begin();
-			auto it_right = right_list.begin();
+			// Итерируем по половинчатым спискам и по исходному списку, сортируя его
+			auto it_current{ std::ranges::next(first, i_first) };
+			auto it_left{ left_list.begin() };
+			auto it_left_end{ left_list.end() }; //Не обязательно. Чисто для удобства.
+			auto it_right{ std::ranges::next(first, i_middle) };
+			auto it_right_end{ std::ranges::next(first, i_last) };
 			// Поэлементно сравниваем половины и сортируем исходный список
-			while ((it_left != left_list.end()) && (it_right != right_list.end()))
+			while ((it_left != it_left_end) && (it_right != it_right_end))
 				(_compare(it_left, it_right))
-				? *it_current++ = *it_left++
-				: *it_current++ = *it_right++;
-			// Добавляем в результирующий список "хвосты", оставшиеся от половинок
-			if (it_left != left_list.end())
-				std::ranges::copy(it_left, left_list.end(), it_current);
-			else if (it_right != right_list.end())
-				std::ranges::copy(it_right, right_list.end(), it_current);
+					? *it_current++ = *it_left++
+					: *it_current++ = *it_right++;
+			// Добавляем в результирующий список "хвост" только от левой части.
+			// Правая уже присутствует в исходном списке
+			if (it_left != it_left_end)
+				std::ranges::copy(it_left, it_left_end, it_current);
 		}
 	};
 }

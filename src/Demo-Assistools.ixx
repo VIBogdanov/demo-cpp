@@ -20,13 +20,11 @@ export namespace assistools
 		std::is_integral_v<TNumber>;
 		std::is_arithmetic_v<TNumber>;
 	}
-	auto inumber_to_digits(const TNumber& number = 0 /*Integer number*/)
-		-> std::vector<int>
+	auto inumber_to_digits(const TNumber& number = 0 /*Integer number*/) noexcept -> std::vector<int>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
-
-		// Разбиваем целое положительное число на отдельные цифры
 		std::vector<int> result;
+
 		do
 			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
 		while (_num /= 10);
@@ -34,7 +32,6 @@ export namespace assistools
 		result.shrink_to_fit();
 		return result;
 	};
-
 
 	/**
 	 """
@@ -63,7 +60,7 @@ export namespace assistools
 		std::is_integral_v<TNumber>;
 		std::is_arithmetic_v<TNumber>;
 	}
-	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = 0)
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = 0) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
 		auto _abs = [](const auto& x) { return (x < 0) ? -x : x;  };
@@ -85,7 +82,7 @@ export namespace assistools
 		}
 		// Сравнение зависит от прямого или реверсного списка диапазонов.
 		auto _compare = [&range_size, &_data_size](const auto& x) -> bool
-			{ return (range_size < 0) ? (x > _data_size) : (x < _data_size); };
+			{ return (range_size < 0) ? (_data_size < x) : (x < _data_size); };
 
 		do
 		{	
@@ -101,5 +98,45 @@ export namespace assistools
 
 		result.shrink_to_fit();
 		return result;
+	};
+
+
+	/**
+	@brief Функция возведения в степень целого числа.
+
+	@details В дополнении к стандартной библиотеке, которая не имеет перегруженной версии
+	функции std::pow(), возвращающей целочисленное значение для возводимых в степень целых чисел.
+	Используется алгоритм быстрого возведения в степень по схеме "справа на лево".
+
+	@param base: Возводимое в степень целое число.
+
+	@param exp: Степень возведения.
+
+	@return Целочисленный результат возведения целого числа в заданную степень.
+	*/
+	template<typename TInt>
+		requires requires {
+		std::is_integral_v<TInt>;
+		std::is_arithmetic_v<TInt>;
+	}
+	TInt ipow(TInt base, TInt exp)
+	{
+		// Обрабатываем пороговые значения
+		if (base == 1 || exp == 0) return 1;
+		// Случаи с отрицательной степенью
+		if (std::numeric_limits<TInt>::is_signed && exp < 0)
+			return ((base == 0) ? std::numeric_limits<TInt>::min()
+				: (base != -1) ? 0 : (exp & 1) ? -1 : 1);
+
+		TInt res = 1;
+		// Побитово считываем степень, начиная с младших разрядов (справа на лево)
+		// и выполняем вычисления в зависимости от значения полученного бита.
+		while (exp) {
+			if (exp & 1) res *= base;
+			base *= base;
+			exp >>= 1;
+		}
+
+		return res;
 	};
 }
