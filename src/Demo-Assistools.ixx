@@ -126,7 +126,7 @@ export namespace assistools
 		// Случаи с отрицательной степенью
 		if (std::numeric_limits<TInt>::is_signed && _exp < 0)
 			return ((_base == 0) ? std::numeric_limits<TInt>::min()
-								 : (_base != -1) ? 0 : (_exp & 1) ? -1 : 1);
+				: (_base != -1) ? 0 : (_exp & 1) ? -1 : 1);
 
 		TInt res{ 1 };
 		// Побитово считываем степень, начиная с младших разрядов (справа на лево)

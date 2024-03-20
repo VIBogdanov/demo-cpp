@@ -274,57 +274,58 @@ namespace
 		std::vector<TIndex> indexes;
 
 	public:
-		GetIndexes(TIndex list_len = 0, sundry::SortMethod method = sundry::SortMethod::SHELL);
+		GetIndexes(const TIndex& list_len = 0, const sundry::SortMethod& method = sundry::SortMethod::SHELL);
 		// Объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему
 		auto crbegin() const { return indexes.crbegin(); };
 		auto crend() const { return indexes.crend(); };
 	};
 
 	template <class TIndex>
-	GetIndexes<TIndex>::GetIndexes(TIndex list_len, sundry::SortMethod method)
+	GetIndexes<TIndex>::GetIndexes(const TIndex& list_len, const sundry::SortMethod& method)
 	{
 		// Исходя из заданного метода, вычисляем на какие диапазоны можно разбить исходный список
 		switch (method)
 		{
 		case sundry::SortMethod::HIBBARD:
-			for (TIndex i{ 1 }, res{ (1 << i) - 1 }; res <= list_len; ++i, res = (1 << i) - 1)
+			for (TIndex i{ 1 }, res{ (1 << i) - 1 }; res <= list_len; res = (1 << ++i) - 1)
 				indexes.emplace_back(res);
 			break;
+
 		case sundry::SortMethod::SEDGEWICK:
-			// (1 << i) = 2^i    (n >> 1) = n/2
-			auto _sedgewick = [](const auto& i) -> TIndex
+			// (1 << i) = 2^i    (n >> 1) = n/2   (i & 1) - четное\нечетное
+			auto _sedgewick = [](const TIndex & i) -> TIndex
 				{
 					return (i & 1) ? 8 * (1 << i) - 6 * (1 << ((i + 1) >> 1)) + 1
 						: 9 * ((1 << i) - (1 << (i >> 1))) + 1;
 				};
 
-			for (TIndex i{ 0 }, res{ _sedgewick(i) }; res <= list_len; ++i, res = _sedgewick(i))
+			for (TIndex i{ 0 }, res{ _sedgewick(i) }; res <= list_len; res = _sedgewick(++i))
 				indexes.emplace_back(res);
-
 			break;
+
 		case sundry::SortMethod::KNUTH:
 			auto _knuth = [](const TIndex& exp) -> TIndex
-				{ TIndex _base = 3;  return (assistools::ipow(_base, exp) - 1) >> 1; };
+				{ const TIndex _base = 3;  return (assistools::ipow(_base, exp) - 1) >> 1; };
 
-			for (TIndex i{ 1 }, res{ _knuth(i) }; res <= (list_len / 3); ++i, res = _knuth(i))
+			for (TIndex i{ 1 }, res{ _knuth(i) }; res <= (list_len / 3); res = _knuth(++i))
 				indexes.emplace_back(res);
-
 			break;
+
 		case sundry::SortMethod::FIBONACCI:
-		{
-			TIndex prev{ 1 }, next{ 1 };
-			while (next <= list_len)
+		{ 
+			for (TIndex prev{ 1 }, next{ 1 }; next <= list_len;)
 			{
 				indexes.emplace_back(next);
 				TIndex _next{ next };
-				next += prev;
+				next += std::move(prev);
 				prev = std::move(_next);
 			}
 		}
 		break;
+
 		case sundry::SortMethod::SHELL:
 		default:
-			for (TIndex res{ list_len >> 1 }; res > 0; res >>= 1)
+			for (TIndex res{ list_len }; res >>= 1;)
 				indexes.emplace(indexes.cbegin(), res);
 			break;
 		}
@@ -681,7 +682,7 @@ export namespace sundry
 
 	@details В отличии от классического метода не использует рекурсивные вызовы и не создает каскад списков.
 	Вместо этого создается список индексов для диапазонов сортировки, по которым происходит отбор
-    значений из списка источника и их сортировка.
+    значений из исходного списка и их сортировка.
 
 	@param first - Итератор, указывающий на первый элемент данных.
 	@param last - Итератор, указывающий за последний элемент данных.
@@ -779,15 +780,15 @@ export namespace sundry
 		auto _compare = [&revers](const auto& it_left, const auto& it_right) -> bool
 			{ return (revers) ? *it_right > *it_left : *it_left > *it_right; };
 		// Вспомогательный класс формирует список индексов исходя
-		// из размера исходнных данных и заданного метода
+		// из размера исходных данных и заданного метода
 		GetIndexes indexes_list(_size, method);
-		// Полученных индексы обрабатываем от большего к меньшему
+		// Полученные индексы обрабатываем от большего к меньшему
 		for (auto it_index{ indexes_list.crbegin() }; it_index != indexes_list.crend(); ++it_index)
 		{
 			auto i_index{ *it_index };
 			// Разбиваем диапазон исходных данных согласно индексу
 			for (auto i_range{ i_index }; i_range < _size; ++i_range)
-				// Сортируем сптсок в заданном диапазоне
+				// Сортируем список в заданном диапазоне
 				for (auto i_current{ i_range }; i_current >= i_index; i_current -= i_index)
 				{
 					auto it_left{ std::ranges::next(first, i_current - i_index) };
