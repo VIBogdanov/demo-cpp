@@ -633,6 +633,7 @@ export namespace sundry
 	template <typename TIterator>
 	void sort_by_bubble(TIterator first, TIterator last, const bool& revers = false)
 	{
+		if (first == last) return;
 		// Устанавливаем итераторы на первый и последний элементы данных.
 		// Далее работаем с итераторами без прямого использование операторов +/- и []
 		// Все это позволяет сортировать практически любые контейнеры
@@ -796,6 +797,75 @@ export namespace sundry
 					if (_compare(it_left, it_right)) std::iter_swap(it_left, it_right);
 					else break; // Если перестановок больше не требуется, досрочно выходим из цикла
 				}
+		}
+	};
+
+
+	/**
+	@brief Функция сортировки методом отбора. Заданный список сортируется по месту.
+
+	@details Это улучшенный вариант пузырьковой сортировки за счет сокращения числа
+	перестановок элементов. Элементы переставляются не на каждом шаге итерации,
+	а только лишь в конце текущей итерации. Дополнительно к классическому алгоритму
+	добавлена возможность одновременного поиска максимального и минимального элементов
+	текущего диапазона за одну итерацию. Реализована двунаправленная сортировка.
+
+	@param first - Итератор, указывающий на первый элемент данных.
+	@param last - Итератор, указывающий за последний элемент данных.
+	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
+	*/
+	template <typename TIterator>
+	void sort_by_selection(TIterator first, TIterator last, const bool& revers = false)
+	{
+		if (first == last) return;
+		// В качестве стартового диапазона начальный и конечные элементы исходного списка
+		auto it_start{ first };
+		auto it_end{ std::ranges::prev(last) };
+		// Потенциальные минимум и максимум в начале и конце диапазона
+		auto it_min{ it_start };
+		auto it_max{ it_end };
+		//Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
+		bool is_swapped{ false };
+
+		auto _compare = [revers](const auto prev, const auto next) -> bool
+			{ return (revers) ? *prev < *next : *next < *prev; };
+		// Перебираем диапазоны, сокращая длину каждого следующего диапазона на 2
+		while (it_start != it_end)
+		{
+			/* Т.к.до последнего элемента не доходим, необходимо перед итерацией
+			   сравнить последний элемент с первым.Возможно последний элемент
+			   потенциальный минимум текущего диапазона, тогда меняем местами
+			*/
+			if (_compare(it_start, it_end)) std::iter_swap(it_start, it_end);
+
+			for (auto it_current{ it_start }; it_current != it_end; ++it_current)
+			{
+				// Если текущий элемент больше последнего в диапазоне, то это потенциальный максимум
+				if (_compare(it_current, it_max)) { it_max = it_current; is_swapped = true; }
+				// Одновременно проверяем на потенциальный минимум, сравнивая с первым элементом текущего диапазона
+				else if (_compare(it_min, it_current)) { it_min = it_current; is_swapped = true; }
+				// Выясняем, требуется ли перестановка на следующей итерации
+				else if (_compare(it_current, std::ranges::next(it_current))) is_swapped = true;
+			}
+
+			if (is_swapped)
+			{
+				// Если найдены потенциальные минимум и/или максимум, выполняем перестановки
+				// элементов с начальным и/или конечным элементом текущего диапазона.
+				if (it_max != it_end) std::iter_swap(it_max, it_end);
+				if (it_min != it_start) std::iter_swap(it_min, it_start);
+				// После каждой итерации по элементам списка, сокращаем длину проверяемого диапазона на 2,
+				// т.к.на предыдущей итерации найдены одновременно минимум и максимум
+				std::advance(it_start, 1);
+				if (it_start != it_end)
+					std::advance(it_end, -1);
+				it_min = it_start;
+				it_max = it_end;
+				is_swapped = false;
+			}
+			else
+				// Если за итерацию перестановок не потребовалось, то список уже отсортирован. Выходим из цикла
+				it_start = it_end;
 		}
 	};
 }

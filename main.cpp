@@ -86,5 +86,14 @@ int main()
 		cout << endl;
 	}
 
+	{
+		cout << endl << " - Сортировка методом отбора." << endl;
+		cout << " sort_by_selection(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
+		vector<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_selection(vec.begin(), vec.end());
+		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		cout << endl;
+	}
+
 	return 0;
 }
