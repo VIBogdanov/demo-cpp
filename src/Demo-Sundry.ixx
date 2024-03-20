@@ -13,6 +13,19 @@ export module Demo:Sundry;
 
 import :Assistools;
 
+//****************************************** Public declaration *************************************************
+export namespace sundry
+{
+	enum class SortMethod
+	{
+		SHELL,
+		HIBBARD,
+		SEDGEWICK,
+		KNUTH,
+		FIBONACCI
+	};
+}
+
 //****************************************** Private code *************************************************
 namespace
 {
@@ -168,9 +181,9 @@ namespace
 
 
 	/**
-	brief Вспомогательная подпрограмма для функции find_nearest_number.
+	@brief Вспомогательная подпрограмма для функции find_nearest_number.
 	
-	details Просматривает цифры левее текущей цифры исходного числа с целью поиска большего или
+	@details Просматривает цифры левее текущей цифры исходного числа с целью поиска большего или
     меньшего значения в зависимости от направления поиска. В случае успешного поиска, выполняет
 	перестановку цифр и сортирует правую часть числа по возрастанию или убыванию в зависимости от
 	направления поиска.
@@ -237,6 +250,84 @@ namespace
 		}
 
 		return result;
+	};
+
+
+	/**
+	@brief Вспомогательный класс для функции sort_by_shell().
+	
+	@details Реализует различные методы формирования диапазонов чисел для перестановки.
+    Реализованы следующие методы:
+    - Классический метод Shell
+    - Hibbard
+    - Sedgewick
+    - Knuth
+    - Fibonacci
+
+	@param list_len - длина заданного списка с данными
+	@param method - метод формирования списка индексов
+	*/
+	template <class TIndex>
+	class GetIndexes
+	{
+		// Массив индексов, по которым будет разбит список данных для обработки
+		std::vector<TIndex> indexes;
+
+	public:
+		GetIndexes(TIndex list_len = 0, sundry::SortMethod method = sundry::SortMethod::SHELL);
+		// Объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему
+		auto crbegin() const { return indexes.crbegin(); };
+		auto crend() const { return indexes.crend(); };
+	};
+
+	template <class TIndex>
+	GetIndexes<TIndex>::GetIndexes(TIndex list_len, sundry::SortMethod method)
+	{
+		// Исходя из заданного метода, вычисляем на какие диапазоны можно разбить исходный список
+		switch (method)
+		{
+		case sundry::SortMethod::HIBBARD:
+			for (TIndex i{ 1 }, res{ (1 << i) - 1 }; res <= list_len; ++i, res = (1 << i) - 1)
+				indexes.emplace_back(res);
+			break;
+		case sundry::SortMethod::SEDGEWICK:
+			// (1 << i) = 2^i    (n >> 1) = n/2
+			auto _sedgewick = [](const auto& i) -> TIndex
+				{
+					return (i & 1) ? 8 * (1 << i) - 6 * (1 << ((i + 1) >> 1)) + 1
+						: 9 * ((1 << i) - (1 << (i >> 1))) + 1;
+				};
+
+			for (TIndex i{ 0 }, res{ _sedgewick(i) }; res <= list_len; ++i, res = _sedgewick(i))
+				indexes.emplace_back(res);
+
+			break;
+		case sundry::SortMethod::KNUTH:
+			auto _knuth = [](const TIndex& exp) -> TIndex
+				{ TIndex _base = 3;  return (assistools::ipow(_base, exp) - 1) >> 1; };
+
+			for (TIndex i{ 1 }, res{ _knuth(i) }; res <= (list_len / 3); ++i, res = _knuth(i))
+				indexes.emplace_back(res);
+
+			break;
+		case sundry::SortMethod::FIBONACCI:
+		{
+			TIndex prev{ 1 }, next{ 1 };
+			while (next <= list_len)
+			{
+				indexes.emplace_back(next);
+				TIndex _next{ next };
+				next += prev;
+				prev = std::move(_next);
+			}
+		}
+		break;
+		case sundry::SortMethod::SHELL:
+		default:
+			for (TIndex res{ list_len >> 1 }; res > 0; res >>= 1)
+				indexes.emplace(indexes.cbegin(), res);
+			break;
+		}
 	};
 }
 
@@ -657,6 +748,53 @@ export namespace sundry
 			// Правая уже присутствует в исходном списке
 			if (it_left != it_left_end)
 				std::ranges::copy(it_left, it_left_end, it_current);
+		}
+	};
+
+
+	/**
+	@brief Функция сортировки методом Shell. Заданный список сортируется по месту.
+	
+	@details Кроме классического метода формирования списки индексов для перестановки,
+	возможно использовать следующие методы:
+    - Hibbard
+    - Sedgewick
+    - Knuth
+    - Fibonacci
+
+    Реализована двунаправленная сортировка.
+
+    @param first - Итератор, указывающий на первый элемент данных.
+	@param last - Итератор, указывающий за последний элемент данных.
+	@param method - Метод формирования списка индексов для перестановки.
+	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
+	*/
+	template <typename TIterator>
+	void sort_by_shell(TIterator first, TIterator last, SortMethod method = SortMethod::SHELL, const bool& revers = false)
+	{
+		// Получаем размер исходного массива данных
+		auto _size{ std::ranges::distance(first, last) };
+		if (_size < 2) return;
+		// Учитываем направление сортировки
+		auto _compare = [&revers](const auto& it_left, const auto& it_right) -> bool
+			{ return (revers) ? *it_right > *it_left : *it_left > *it_right; };
+		// Вспомогательный класс формирует список индексов исходя
+		// из размера исходнных данных и заданного метода
+		GetIndexes indexes_list(_size, method);
+		// Полученных индексы обрабатываем от большего к меньшему
+		for (auto it_index{ indexes_list.crbegin() }; it_index != indexes_list.crend(); ++it_index)
+		{
+			auto i_index{ *it_index };
+			// Разбиваем диапазон исходных данных согласно индексу
+			for (auto i_range{ i_index }; i_range < _size; ++i_range)
+				// Сортируем сптсок в заданном диапазоне
+				for (auto i_current{ i_range }; i_current >= i_index; i_current -= i_index)
+				{
+					auto it_left{ std::ranges::next(first, i_current - i_index) };
+					auto it_right{ std::ranges::next(first, i_current) };
+					if (_compare(it_left, it_right)) std::iter_swap(it_left, it_right);
+					else break; // Если перестановок больше не требуется, досрочно выходим из цикла
+				}
 		}
 	};
 }

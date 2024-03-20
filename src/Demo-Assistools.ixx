@@ -109,7 +109,6 @@ export namespace assistools
 	Используется алгоритм быстрого возведения в степень по схеме "справа на лево".
 
 	@param base: Возводимое в степень целое число.
-
 	@param exp: Степень возведения.
 
 	@return Целочисленный результат возведения целого числа в заданную степень.
@@ -119,22 +118,23 @@ export namespace assistools
 		std::is_integral_v<TInt>;
 		std::is_arithmetic_v<TInt>;
 	}
-	TInt ipow(TInt base, TInt exp)
+	TInt ipow(const TInt& base, const TInt& exp)
 	{
+		TInt _base{ base }, _exp{ exp };
 		// Обрабатываем пороговые значения
-		if (base == 1 || exp == 0) return 1;
+		if (_base == 1 || _exp == 0) return 1;
 		// Случаи с отрицательной степенью
-		if (std::numeric_limits<TInt>::is_signed && exp < 0)
-			return ((base == 0) ? std::numeric_limits<TInt>::min()
-				: (base != -1) ? 0 : (exp & 1) ? -1 : 1);
+		if (std::numeric_limits<TInt>::is_signed && _exp < 0)
+			return ((_base == 0) ? std::numeric_limits<TInt>::min()
+								 : (_base != -1) ? 0 : (_exp & 1) ? -1 : 1);
 
-		TInt res = 1;
+		TInt res{ 1 };
 		// Побитово считываем степень, начиная с младших разрядов (справа на лево)
 		// и выполняем вычисления в зависимости от значения полученного бита.
-		while (exp) {
-			if (exp & 1) res *= base;
-			base *= base;
-			exp >>= 1;
+		while (_exp) {
+			if (_exp & 1) res *= _base;
+			_base *= _base;
+			_exp >>= 1;
 		}
 
 		return res;
