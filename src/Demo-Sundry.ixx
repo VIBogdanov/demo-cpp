@@ -16,6 +16,10 @@ import :Assistools;
 //****************************************** Public declaration *************************************************
 export namespace sundry
 {
+	/**
+	Перечисление используется в sort_by_shell для обозначения метода,
+	применяемого для разбиения исходного списка на подсписки для сортировки.
+	*/
 	enum class SortMethod
 	{
 		SHELL,
@@ -274,14 +278,14 @@ namespace
 		std::vector<TIndex> indexes;
 
 	public:
-		GetIndexes(const TIndex& list_len = 0, const sundry::SortMethod& method = sundry::SortMethod::SHELL);
+		GetIndexes(const TIndex& list_len = 0, const sundry::SortMethod method = sundry::SortMethod::SHELL);
 		// Объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему
 		auto crbegin() const { return indexes.crbegin(); };
 		auto crend() const { return indexes.crend(); };
 	};
 
 	template <class TIndex>
-	GetIndexes<TIndex>::GetIndexes(const TIndex& list_len, const sundry::SortMethod& method)
+	GetIndexes<TIndex>::GetIndexes(const TIndex& list_len, const sundry::SortMethod method)
 	{
 		// Исходя из заданного метода, вычисляем на какие диапазоны можно разбить исходный список
 		switch (method)
@@ -428,13 +432,13 @@ export namespace sundry
 			if (sum_dict.contains(sum - target))
 			{
 				// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
+				// У одной и той же суммы возможно несколько индексов
 				auto [first, last] = sum_dict.equal_range(sum - target);
 				for (; first != last; ++first)
 					result_list.emplace_back(first->second + 1, idx);
 			}
 
 			// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
-			// У одной и той же суммы возможно несколько индексов
 			sum_dict.emplace(sum, idx);
 			++idx;
 		}
@@ -596,14 +600,14 @@ export namespace sundry
 		const TNumber sign_number{ (number < 0) ? -1 : 1 };
 		const bool is_previous{ (number < 0) ? !previous : previous };
 		// Разбиваем заданное число на отдельные цифры
-		auto digits_list = assistools::inumber_to_digits(number);
+		auto digits_list{ assistools::inumber_to_digits(number) };
 		// список для накопления результатов поиска
-		std::vector<TNumber> result_list{ };
+		std::vector<TNumber> result_list;
 		// цикл перебора цифр заданного числа справа на лево (с хвоста к голове) кроме первой цифры
 		for (auto it_digit{ digits_list.rbegin() }; it_digit != std::ranges::prev(digits_list.rend()); ++it_digit)
 			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
 			// result передаем только для того, чтобы получить корректный тип возвращаемого значения
-			if (auto res = _do_find_nearest(result, digits_list, it_digit, is_previous))
+			if (auto res{ _do_find_nearest(result, digits_list, it_digit, is_previous) })
 				result_list.emplace_back(res);
 		// Если список результирующих чисел не пуст, находим наибольшее или наименьшее число
 		// в зависимости от направления поиска и восстанавливаем знак числа.
@@ -635,7 +639,7 @@ export namespace sundry
 	{
 		if (first == last) return;
 		// Устанавливаем итераторы на первый и последний элементы данных.
-		// Далее работаем с итераторами без прямого использование операторов +/- и []
+		// Далее работаем с итераторами без прямого использования операторов +/- и []
 		// Все это позволяет сортировать практически любые контейнеры
 		auto it_start{ first };
 		auto it_end{ std::ranges::prev(last) };
@@ -845,7 +849,7 @@ export namespace sundry
 				// Одновременно проверяем на потенциальный минимум, сравнивая с первым элементом текущего диапазона
 				else if (_compare(it_min, it_current)) { it_min = it_current; is_swapped = true; }
 				// Выясняем, требуется ли перестановка на следующей итерации
-				else if (_compare(it_current, std::ranges::next(it_current))) is_swapped = true;
+				else if (!is_swapped && _compare(it_current, std::ranges::next(it_current))) is_swapped = true;
 			}
 
 			if (is_swapped)

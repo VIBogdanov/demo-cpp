@@ -20,7 +20,7 @@ export namespace assistools
 		std::is_integral_v<TNumber>;
 		std::is_arithmetic_v<TNumber>;
 	}
-	auto inumber_to_digits(const TNumber& number = 0 /*Integer number*/) noexcept -> std::vector<int>
+	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
 		std::vector<int> result;
@@ -60,7 +60,7 @@ export namespace assistools
 		std::is_integral_v<TNumber>;
 		std::is_arithmetic_v<TNumber>;
 	}
-	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = 0) noexcept
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
 		auto _abs = [](const auto& x) { return (x < 0) ? -x : x;  };
@@ -118,9 +118,8 @@ export namespace assistools
 		std::is_integral_v<TInt>;
 		std::is_arithmetic_v<TInt>;
 	}
-	TInt ipow(const TInt& base, const TInt& exp)
+	TInt ipow(TInt _base, TInt _exp)
 	{
-		TInt _base{ base }, _exp{ exp };
 		// Обрабатываем пороговые значения
 		if (_base == 1 || _exp == 0) return 1;
 		// Случаи с отрицательной степенью

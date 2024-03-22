@@ -95,5 +95,16 @@ int main()
 		cout << endl;
 	}
 
+	{
+		cout << endl << " - Минимальное количество перестановок." << endl;
+		cout << " get_number_permutations(\n";
+		cout << "\tstd::vector<int>{ 10, 31, 15, 22, 14, 17, 16 },\n";
+		cout << "\tstd::vector<int>{ 16, 22, 14, 10, 31, 15, 17 }) -> ";
+		std::vector<int> source_list{ 10, 31, 15, 22, 14, 17, 16 };
+		std::vector<int> target_list{ 16, 22, 14, 10, 31, 15, 17 };
+		auto res = puzzles::get_number_permutations(source_list, target_list);
+		std::cout << res << endl;
+	}
+
 	return 0;
 }
