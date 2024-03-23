@@ -243,7 +243,7 @@ namespace
 					// с учетом направления поиска
 					std::sort(_digits_list.rbegin(), current_iter,
 								[previous](const auto& a, const auto& b) -> bool
-									{ return (previous) ? a < b : b < a; });
+									{ return (previous) ? a < b : b < a; } );
 
 					// Собираем из массива цифр результирующее число
 					std::ranges::for_each(std::as_const(_digits_list),

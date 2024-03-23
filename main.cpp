@@ -106,5 +106,12 @@ int main()
 		std::cout << res << endl;
 	}
 
+	{
+		cout << endl << " - Олимпиадная задача. См. описание в Demo-Puzzles.ixx." << endl;
+		cout << " get_pagebook_number(27, 2, {8,0}) -> ";
+		std::vector<int> vec{ 8, 0 };
+		std::cout << puzzles::get_pagebook_number(27, 2, vec) << endl;
+	}
+
 	return 0;
 }

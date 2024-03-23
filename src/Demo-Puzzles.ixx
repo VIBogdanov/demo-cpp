@@ -1,4 +1,5 @@
 ﻿module;
+#include <algorithm>
 #include <unordered_map>
 #include <stdexcept>
 export module Demo:Puzzles;
@@ -6,7 +7,7 @@ export module Demo:Puzzles;
 export namespace puzzles
 {
 	/**
-	brief Подсчитывает минимальное количество перестановок, которое необходимо произвести для того,
+	@brief Подсчитывает минимальное количество перестановок, которое необходимо произвести для того,
 	чтобы из исходного списка (source_list) получить целевой список (target_list).
 
 	@details При этом порядок следования и непрерывность списков не имеют значения.
@@ -57,4 +58,51 @@ export namespace puzzles
 
 		return count_permutations;
 	};
-}
+
+
+	/**
+	@brief Олимпиадная задача. Необходимо определить наибольший номер страницы X книги,
+    с которой нужно начать читать книгу, чтобы ровно 'count' номеров страниц, начиная
+    со страницы X и до последней страницей 'pages', заканчивались на цифры из списка  'digits'.
+
+    @details Например:
+    - вызов get_pagebook_number(1000000000000, 1234, [5,6]) вернет 999999993835
+    - вызов get_pagebook_number(27, 2, [8,0]) вернет 18
+    - вызов get_pagebook_number(20, 5, [4,7]) вернет 0
+
+    @param pages: Количество страниц в книге
+	@param count: Количество страниц заканчивающихся на цифры из списка digits
+	@param digits: Список цифр, на которые должны заканчиваться искомые страницы
+
+    @return Номер искомой страницы или 0 в случае безуспешного поиска
+	*/
+	template <typename TContainer>
+	auto get_pagebook_number(const typename TContainer::value_type& pages,
+		const typename TContainer::value_type& count,
+		const TContainer& digits)
+		-> typename TContainer::value_type
+	{
+		// Отрабатываем некорректные параметры
+		if (count <= 0 || pages < count || digits.size() == 0) return 0;
+		// Индекс может быть отрицательным
+		using TIndex = std::make_signed_t<typename TContainer::size_type>;
+		using TValue = typename TContainer::value_type;
+		// Копируем список цифр, т.к. прямо в нем будем производить вычисления
+		TContainer _digits{ digits };
+		// Формируем список с ближайшими меньшими числами, оканчивающиеся на цифры из списка digits
+		for (TValue& last_digit : _digits)
+			last_digit = (pages - last_digit) / 10 * 10 + last_digit;
+		// Полученный список обязательно должен быть отсортирован в обратном порядке
+		std::ranges::sort(_digits, [](const auto& a, const auto& b) { return b < a; });
+		// Заодно удаляем дубликаты
+		_digits.erase(std::unique(_digits.begin(), _digits.end()), _digits.end());
+		//Вычисляем позицию числа в списке digits, которое соответствует смещению count
+		TIndex idx{ (count % _digits.size()) - 1 };
+		// Т.к.последующая последняя цифра повторяется через 10,
+		// вычисляем множитель с учетом уже вычисленных значений
+		TValue multiplier{ (count - 1) / static_cast<TValue>(_digits.size()) };
+
+		return ((idx < 0) ? *std::ranges::next(_digits.end(), idx)
+			: *std::ranges::next(_digits.begin(), idx)) - (multiplier * 10);
+	};
+} 
