@@ -2,6 +2,7 @@
 #include <clocale>
 #include <iostream>
 #include <vector>
+#include <list>
 
 import Demo;
 
@@ -61,9 +62,9 @@ int main()
 
 	{
 		cout << endl << " - Сортировки методом пузырька." << endl;
-		cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4 }) -> ";
-		vector<int> vec{ 2, 3, 1, 5, 4 };
-		sundry::sort_by_bubble(vec.begin(), vec.end());
+		cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
+		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_bubble(vec);
 		std::ranges::for_each(std::as_const(vec), [](const auto& n) { cout << n << ", "; });
 		cout << endl;
 	}
@@ -71,46 +72,55 @@ int main()
 	{
 		cout << endl << " - Сортировка методом слияния." << endl;
 		cout << " sort_by_merge(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
-		vector<int> vec{ 2, 3, 1, 5, 4, 7 };
-		sundry::sort_by_merge(vec.begin(), vec.end());
-		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_merge(vec);
+		std::ranges::for_each(vec, [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
 
 	{
 		cout << endl << " - Сортировка методом Shell." << endl;
 		cout << " sort_by_shell(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
-		vector<int> vec{ 2, 3, 1, 5, 4, 7 };
-		sundry::sort_by_shell(vec.begin(), vec.end(), sundry::SortMethod::SHELL);
-		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_shell(vec, sundry::SortMethod::SHELL);
+		std::ranges::for_each(vec, [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
 
 	{
 		cout << endl << " - Сортировка методом отбора." << endl;
 		cout << " sort_by_selection(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
-		vector<int> vec{ 2, 3, 1, 5, 4, 7 };
-		sundry::sort_by_selection(vec.begin(), vec.end());
-		std::for_each(vec.begin(), vec.end(), [](const auto& n) { std::cout << n << ", "; });
+		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
+		sundry::sort_by_selection(vec);
+		std::ranges::for_each(vec, [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
 
 	{
 		cout << endl << " - Минимальное количество перестановок." << endl;
 		cout << " get_number_permutations(\n";
-		cout << "\tstd::vector<int>{ 10, 31, 15, 22, 14, 17, 16 },\n";
-		cout << "\tstd::vector<int>{ 16, 22, 14, 10, 31, 15, 17 }) -> ";
-		std::vector<int> source_list{ 10, 31, 15, 22, 14, 17, 16 };
-		std::vector<int> target_list{ 16, 22, 14, 10, 31, 15, 17 };
-		auto res = puzzles::get_number_permutations(source_list, target_list);
+		cout << "\t{ 10, 31, 15, 22, 14, 17, 16 },\n";
+		cout << "\t{ 16, 22, 14, 10, 31, 15, 17 }) -> ";
+		auto res = puzzles::get_number_permutations({ 10, 31, 15, 22, 14, 17, 16 }, { 16, 22, 14, 10, 31, 15, 17 });
 		std::cout << res << endl;
 	}
 
+	cout << endl << " - Олимпиадная задача. См. описание в Demo-Puzzles.ixx." << endl;
+	cout << " get_pagebook_number(27, 2, {8,0}) -> ";
+	std::cout << puzzles::get_pagebook_number(27, 2, { 8, 0 }) << endl;
+
 	{
-		cout << endl << " - Олимпиадная задача. См. описание в Demo-Puzzles.ixx." << endl;
-		cout << " get_pagebook_number(27, 2, {8,0}) -> ";
-		std::vector<int> vec{ 8, 0 };
-		std::cout << puzzles::get_pagebook_number(27, 2, vec) << endl;
+		cout << endl << " - Сформировать все возможные уникальные наборы чисел из указанных цифр." << endl;
+		cout << " get_combination_numbers(std::vector<int>{ 0, 2, 7 }) -> ";
+		auto res = puzzles::get_combination_numbers({ 0, 2, 7 });
+		std::cout << "{ ";
+		for (auto& e : res)
+		{
+			std::cout << "{ ";
+			std::for_each(e.begin(), e.end(), [](const auto& n) { std::cout << n << " "; });
+			std::cout << "} ";
+		}
+		cout << "}" << endl;
 	}
 
 	return 0;

@@ -16,10 +16,9 @@ export namespace assistools
 	@return (vector<int>) Массив цифр.
 	*/
 	template <typename TNumber = int>
-		requires requires {
-		std::is_integral_v<TNumber>;
-		std::is_arithmetic_v<TNumber>;
-	}
+		requires
+			std::is_integral_v<TNumber> &&
+			std::is_arithmetic_v<TNumber>
 	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
@@ -31,6 +30,40 @@ export namespace assistools
 
 		result.shrink_to_fit();
 		return result;
+	};
+
+	/**
+	@brief Функция получения целого числа из набора цифр.
+
+	@example inumber_from_digits({1,2,4}) -> 124
+
+	@param digits - Список цифр или начальный и конечный итераторы списка.
+
+	@return Целое число.
+	*/
+	template <std::input_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
+	requires
+		std::is_integral_v<typename TIterator::value_type> &&
+		std::is_arithmetic_v<typename TIterator::value_type>
+	auto inumber_from_digits(const TIterator first, const TSIterator last)
+		-> TIterator::value_type
+	{
+		using TNumber = typename std::iterator_traits<TIterator>::value_type;
+		auto _abs = [](auto& x) {return (x < 0) ? -x : x; };
+		TNumber result{ 0 };
+		for (auto _first = first; _first != last; ++_first)
+			result = result * 10 + _abs(*_first);
+		return result;
+	}
+
+	template <typename TContainer = std::vector<int>>
+	requires std::ranges::range<TContainer> &&
+			 std::is_integral_v<typename TContainer::value_type> &&
+			 std::is_arithmetic_v<typename TContainer::value_type>
+	auto inumber_from_digits(const TContainer& digits)
+		-> TContainer::value_type
+	{
+		return inumber_from_digits(std::ranges::begin(digits), std::ranges::end(digits));
 	};
 
 	/**
@@ -56,14 +89,11 @@ export namespace assistools
 	"""
 	*/
 	template <typename TNumber = int>
-		requires requires {
-		std::is_integral_v<TNumber>;
-		std::is_arithmetic_v<TNumber>;
-	}
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
-		auto _abs = [](const auto& x) { return (x < 0) ? -x : x;  };
+		auto _abs = [](auto& x) { return (x < 0) ? -x : x;  };
 
 		std::vector<std::pair<TNumber, TNumber>> result;
 		// Сохраняем знак
@@ -114,10 +144,9 @@ export namespace assistools
 	@return Целочисленный результат возведения целого числа в заданную степень.
 	*/
 	template<typename TInt>
-		requires requires {
-		std::is_integral_v<TInt>;
-		std::is_arithmetic_v<TInt>;
-	}
+		requires
+			std::is_integral_v<TInt> &&
+			std::is_arithmetic_v<TInt>
 	TInt ipow(TInt _base, TInt _exp)
 	{
 		// Обрабатываем пороговые значения

@@ -35,7 +35,7 @@ namespace
 {
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
 	auto _find_item_by_binary(const TIterator& first, const TIterator& last, const TItem& target)
-		-> std::make_signed_t < std::iter_difference_t<TIterator>>
+		-> std::make_signed_t <typename TIterator::difference_type>
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
@@ -100,14 +100,14 @@ namespace
 	}
 
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
-		requires (std::is_arithmetic_v<TItem>)
+		requires std::is_arithmetic_v<TItem>
 	auto _find_item_by_interpolation(const TIterator& first, const TIterator& last, const TItem& target)
-		-> std::make_signed_t < std::iter_difference_t<TIterator>>
+		-> std::make_signed_t <typename TIterator::difference_type>
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
 
-		using TIndex = std::iter_difference_t<TIterator>;
+		using TIndex = typename TIterator::difference_type;
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
 		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");
 
@@ -199,14 +199,11 @@ namespace
 
     @return  Возвращает найденное число или 0 в случае безуспешного поиска
 	*/
-	template <typename T>
-	concept TypeContainer_ia = requires {
-		std::is_integral_v<T>;
-		std::ranges::range<T>;
-		std::is_arithmetic_v<T>;
-	};
 
-	template <typename TResult, TypeContainer_ia TContainer, typename TIterator = typename TContainer::iterator>
+	template <typename TResult, typename TContainer, typename TIterator = typename TContainer::iterator>
+		requires std::ranges::range<TContainer>&&
+				 std::is_integral_v<typename TContainer::value_type>&&
+				 std::is_arithmetic_v<typename TContainer::value_type>
 	auto _do_find_nearest(const TResult& result_type,
 						  const TContainer& digits_list,
 						  const TIterator digit_iter,
@@ -316,6 +313,7 @@ namespace
 			break;
 
 		case sundry::SortMethod::FIBONACCI:
+		// В отличии от классической последовательности (1, 1, 2, 3, 5...) реализует (1, 2, 3, 5...)
 		{ 
 			for (TIndex prev{ 1 }, next{ 1 }; next <= list_len;)
 			{
@@ -330,7 +328,8 @@ namespace
 		case sundry::SortMethod::SHELL:
 		default:
 			for (TIndex res{ list_len }; res >>= 1;)
-				indexes.emplace(indexes.cbegin(), res);
+				indexes.emplace_back(res);
+			std::ranges::reverse(indexes);
 			break;
 		}
 	};
@@ -362,10 +361,9 @@ export namespace sundry
 	@return (int) Наибольший общий делитель
 	*/
 	template <typename TNumber = int>
-		requires requires {
-		std::is_integral_v<TNumber>;
-		std::is_arithmetic_v<TNumber>;
-	}
+		requires
+			std::is_integral_v<TNumber> &&
+			std::is_arithmetic_v<TNumber>
 	auto get_common_divisor(const TNumber& number_a = 0, const TNumber& number_b = 0)
 		-> std::optional<TNumber>
 	{
@@ -404,8 +402,8 @@ export namespace sundry
 		пары целых чисел, обозначающих индексы элементов списка - начальный и конечный индексы включительно.
 		Если ни один диапазон не найден, возвращается пустой список.
 	*/
-	template <typename TContainer>
-		requires(!std::is_array_v<TContainer>)
+	template <typename TContainer = std::vector<int>>
+		requires std::is_integral_v<typename TContainer::value_type>
 	auto find_intervals(const TContainer& elements, const typename TContainer::value_type& target)
 		-> std::vector<std::pair<typename TContainer::size_type, typename TContainer::size_type>>
 	{
@@ -414,12 +412,10 @@ export namespace sundry
 
 		std::vector<std::pair<TIndex, TIndex>> result_list;
 		std::unordered_multimap<TElement, TIndex> sum_dict;
-
-		TElement sum{ 0 };
-		TIndex idx{ 0 };
-
+		
 		// Суммируем элементы списка по нарастающей
-		for (const auto& e : elements)
+		TElement sum{ 0 };
+		for (TIndex idx{ 0 }; const auto& e : elements)
 		{
 			sum = std::move(sum) + e;
 
@@ -464,12 +460,9 @@ export namespace sundry
 
 	@return (long long) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
-	template <typename T>
-	concept TypeContainer =
-		!std::is_array_v<T> &&
-		std::ranges::range<T>;
 
-	template <TypeContainer TContainer>
+	template <typename TContainer = std::vector<int>>
+		requires std::ranges::range<TContainer> && (!std::is_array_v<TContainer>)
 	auto find_item_by_binary(const TContainer& elements, const typename TContainer::value_type& target)
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
@@ -524,14 +517,10 @@ export namespace sundry
 
     @return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
-	template <typename T>
-	concept TypeContainer_a = requires {
-		!std::is_array_v<T>;
-		std::ranges::range<T>;
-		std::is_arithmetic_v<T>;
-	};
 
-	template <TypeContainer_a TContainer>
+	template <typename TContainer>
+		requires std::ranges::range<TContainer> && (!std::is_array_v<TContainer>) &&
+				 std::is_arithmetic_v<typename TContainer::value_type>
 	auto find_item_by_interpolation(const TContainer& elements, const typename TContainer::value_type& target)
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
@@ -559,10 +548,9 @@ export namespace sundry
 	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template <typename T, std::size_t N>
-		requires requires {
-			std::is_array_v<T[N]>;
-			std::is_arithmetic_v<T>;
-		}
+		requires
+			std::is_array_v<T[N]> &&
+			std::is_arithmetic_v<T>
 	auto find_item_by_interpolation(const T(&elements)[N], const T& target)
 		-> std::make_signed_t<decltype(N)>
 	{
@@ -588,10 +576,7 @@ export namespace sundry
     @return Найденное число. Если поиск безуспешен, возвращается 0.
 	*/
 	template <typename TNumber = int>
-		requires requires {
-		std::is_integral_v<TNumber>;
-		std::is_arithmetic_v<TNumber>;
-	}
+		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto find_nearest_number(const TNumber& number, const bool& previous = true)
 		-> TNumber
 	{
@@ -634,8 +619,9 @@ export namespace sundry
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
-	template <typename TIterator>
-	void sort_by_bubble(TIterator first, TIterator last, const bool& revers = false)
+	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
+		requires std::permutable<TIterator>
+	void sort_by_bubble(TIterator first, TSIterator last, const bool& revers = false)
 	{
 		if (first == last) return;
 		// Устанавливаем итераторы на первый и последний элементы данных.
@@ -681,6 +667,14 @@ export namespace sundry
 		}
 	};
 
+	// Перегруженный вариант
+	template <typename TContainer>
+		requires std::ranges::range<TContainer>
+	void sort_by_bubble(TContainer&& data, const bool& revers = false)
+	{
+		sort_by_bubble(std::ranges::begin(data), std::ranges::end(data), revers);
+	};
+
 
 	/**
 	@brief Функция сортировки методом слияния. Сортирует заданный список по месту.
@@ -693,8 +687,9 @@ export namespace sundry
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
-	template <typename TIterator>
-	void sort_by_merge(TIterator first, TIterator last, const bool& revers = false)
+	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
+		requires std::permutable<TIterator>
+	void sort_by_merge(TIterator first, TSIterator last, const bool& revers = false)
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
@@ -737,14 +732,16 @@ export namespace sundry
 			// Выбираем из очереди диапазоны начиная с меньших
 			auto [i_first, i_middle, i_last] = query_work.top();
 			query_work.pop();
-			// Формируем временный список с данными только  для левой половины. Правая в исходном списке
-			std::vector<TItem> left_list{ std::ranges::next(first, i_first), std::ranges::next(first, i_middle) };
+
 			// Итерируем по половинчатым спискам и по исходному списку, сортируя его
 			auto it_current{ std::ranges::next(first, i_first) };
-			auto it_left{ left_list.begin() };
-			auto it_left_end{ left_list.end() }; //Не обязательно. Чисто для удобства.
 			auto it_right{ std::ranges::next(first, i_middle) };
 			auto it_right_end{ std::ranges::next(first, i_last) };
+			// Формируем временный список с данными только  для левой половины. Правая в исходном списке
+			std::vector<TItem> left_list{ it_current, it_right };
+			auto it_left{ left_list.begin() };
+			auto it_left_end{ left_list.end() }; //Не обязательно. Чисто для удобства.
+			
 			// Поэлементно сравниваем половины и сортируем исходный список
 			while ((it_left != it_left_end) && (it_right != it_right_end))
 				(_compare(it_left, it_right))
@@ -753,8 +750,16 @@ export namespace sundry
 			// Добавляем в результирующий список "хвост" только от левой части.
 			// Правая уже присутствует в исходном списке
 			if (it_left != it_left_end)
-				std::ranges::copy(it_left, it_left_end, it_current);
+				std::ranges::move(it_left, it_left_end, it_current);
 		}
+	};
+
+	// Перегруженный вариант
+	template <typename TContainer>
+		requires std::ranges::range<TContainer>
+	void sort_by_merge(TContainer&& data, const bool& revers = false)
+	{
+		sort_by_merge(std::ranges::begin(data), std::ranges::end(data), revers);
 	};
 
 
@@ -775,8 +780,9 @@ export namespace sundry
 	@param method - Метод формирования списка индексов для перестановки.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
-	template <typename TIterator>
-	void sort_by_shell(TIterator first, TIterator last, SortMethod method = SortMethod::SHELL, const bool& revers = false)
+	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
+		requires std::permutable<TIterator>
+	void sort_by_shell(TIterator first, TSIterator last, SortMethod method = SortMethod::SHELL, const bool& revers = false)
 	{
 		// Получаем размер исходного массива данных
 		auto _size{ std::ranges::distance(first, last) };
@@ -804,6 +810,14 @@ export namespace sundry
 		}
 	};
 
+	// Перегруженный вариант
+	template <typename TContainer>
+		requires std::ranges::range<TContainer>
+	void sort_by_shell(TContainer&& data, SortMethod method = SortMethod::SHELL, const bool& revers = false)
+	{
+		sort_by_shell(std::ranges::begin(data), std::ranges::end(data), method, revers);
+	};
+
 
 	/**
 	@brief Функция сортировки методом отбора. Заданный список сортируется по месту.
@@ -818,8 +832,9 @@ export namespace sundry
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
-	template <typename TIterator>
-	void sort_by_selection(TIterator first, TIterator last, const bool& revers = false)
+	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
+		requires std::permutable<TIterator>
+	void sort_by_selection(TIterator first, TSIterator last, const bool& revers = false)
 	{
 		if (first == last) return;
 		// В качестве стартового диапазона начальный и конечные элементы исходного списка
@@ -871,5 +886,13 @@ export namespace sundry
 				// Если за итерацию перестановок не потребовалось, то список уже отсортирован. Выходим из цикла
 				it_start = it_end;
 		}
+	};
+
+	// Перегруженный вариант
+	template <typename TContainer>
+		requires std::ranges::range<TContainer>
+	void sort_by_selection(TContainer&& data, const bool& revers = false)
+	{
+		sort_by_selection(std::ranges::begin(data), std::ranges::end(data), revers);
 	};
 }
