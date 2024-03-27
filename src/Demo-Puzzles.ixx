@@ -79,8 +79,8 @@ export namespace puzzles
 	*/
 	template <typename TContainer = std::vector<int>>
 	auto get_pagebook_number(const typename TContainer::value_type& pages,
-		const typename TContainer::value_type& count,
-		const TContainer& digits)
+							const typename TContainer::value_type& count,
+							const TContainer& digits)
 		-> typename TContainer::value_type
 	{
 		// Отрабатываем некорректные параметры
@@ -126,7 +126,7 @@ export namespace puzzles
     @return Список уникальных комбинаций
 	*/
 	template <typename TContainer = std::vector<int>>
-		requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
+	requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
 	auto get_combination_numbers(const TContainer& digits)
 		-> std::vector<std::vector<typename TContainer::value_type>>
 	{
@@ -153,9 +153,12 @@ export namespace puzzles
 			// Сразу же формируем число из всего набора цифр
 			if (*_digits.begin() != 0)
 				result.push_back({ assistools::inumber_from_digits(_digits) });
-			// Кроме одиночных, формируем комбинации с двух-, трех- ... N- числами.
-			// Максимальный N равен размеру заданного списка одиночных цифр минус 1.
-			// Начинаем с двухзначных, т.к. комбинация из одиночных цифр уже сформирована
+			/* 
+			Кроме одиночных, формируем комбинации с двух - , трех - ... N - числами.
+			Максимальный N равен размеру заданного списка одиночных цифр минус 1,
+			т.к. число из полного набора цифр уже сформировано.
+			Начинаем с двухзначных, т.к. комбинация из одиночных цифр уже сформирована
+			*/
 			for (decltype(_size) N{ 2 }; N < _size; ++N)
 			{
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
@@ -188,7 +191,7 @@ export namespace puzzles
 		// Формируем следующую комбинацию одиночных цифр
 		while (std::next_permutation(_digits.begin(), _digits.end()));
 		// Сортируем для удобства восприятия (необязательно).
-		std::sort(result.begin(), result.end());
+		std::ranges::sort(result);
 		return result;
 	};
 } 
