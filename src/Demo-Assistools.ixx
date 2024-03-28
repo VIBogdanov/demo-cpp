@@ -2,6 +2,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <numeric>
 export module Demo:Assistools;
 
 export namespace assistools
@@ -16,9 +17,7 @@ export namespace assistools
 	@return (vector<int>) Массив цифр.
 	*/
 	template <typename TNumber = int>
-		requires
-			std::is_integral_v<TNumber> &&
-			std::is_arithmetic_v<TNumber>
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
@@ -48,12 +47,10 @@ export namespace assistools
 	auto inumber_from_digits(const TIterator first, const TSIterator last)
 		-> TIterator::value_type
 	{
-		using TNumber = typename std::iterator_traits<TIterator>::value_type;
-		auto _abs = [](auto& x) {return (x < 0) ? -x : x; };
-		TNumber result{ 0 };
-		for (auto _first = first; _first != last; ++_first)
-			result = result * 10 + _abs(*_first);
-		return result;
+		using TNumber = typename std::iterator_traits<TIterator>::value_type; //Альтернативный вариант
+		auto get_number = [](TNumber num, const TNumber& dig) -> TNumber
+			{ return num * 10 + ((dig < 0) ? -dig : dig) % 10; };
+		return std::accumulate(first, last, 0, get_number);
 	}
 
 	template <typename TContainer = std::vector<int>>
@@ -90,41 +87,37 @@ export namespace assistools
 	*/
 	template <typename TNumber = int>
 	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber())
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
-		auto _abs = [](auto& x) { return (x < 0) ? -x : x;  };
-
 		std::vector<std::pair<TNumber, TNumber>> result;
+		if (data_size == 0) return result;
 		// Сохраняем знак
 		TNumber sign{ (data_size < 0) ? -1 : 1 };
 		// Далее работаем без знака
+		auto _abs = [](auto& x) { return (x < 0) ? -x : x;  };
+		TNumber current_index{ 0 };
 		TNumber _data_size{ _abs(data_size) };
 		TNumber _range_size{ (range_size == 0) ? _data_size : _abs(range_size) };
-		TNumber idx{ 0 };
-
 		// Если размер диапазона отрицательный, переворачиваем список диапазонов
 		if (range_size < 0)
 		{
-			idx = std::move(_data_size) - 1;
+			current_index = std::move(_data_size) - 1;
 			_data_size = -1;
 			_range_size = -_range_size;
 		}
 		// Сравнение зависит от прямого или реверсного списка диапазонов.
-		auto _compare = [&range_size, &_data_size](const auto& x) -> bool
-			{ return (range_size < 0) ? (_data_size < x) : (x < _data_size); };
+		auto _compare = [&range_size, &_data_size](const auto& _index) -> bool
+			{ return (range_size < 0) ? (_data_size < _index) : (_index < _data_size); };
 
-		do
-		{	
-			auto rdx{ idx + _range_size };
+		for (TNumber next_index{ current_index + _range_size }; _compare(current_index); next_index += _range_size)
+		{
 			// При формировании списка диапазонов восстанавливаем знак
-			(_compare(rdx))
-				? result.emplace_back(idx * sign, rdx * sign)
-				: result.emplace_back(idx * sign, _data_size * sign);
-
-			idx = std::move(rdx);
+			(_compare(next_index))
+				? result.emplace_back(current_index * sign, next_index * sign)
+				: result.emplace_back(current_index * sign, _data_size * sign);
+			current_index = std::move(next_index);
 		}
-		while (_compare(idx));
 
 		result.shrink_to_fit();
 		return result;
@@ -144,9 +137,7 @@ export namespace assistools
 	@return Целочисленный результат возведения целого числа в заданную степень.
 	*/
 	template<typename TInt>
-		requires
-			std::is_integral_v<TInt> &&
-			std::is_arithmetic_v<TInt>
+	requires std::is_integral_v<TInt> && std::is_arithmetic_v<TInt>
 	TInt ipow(TInt _base, TInt _exp)
 	{
 		// Обрабатываем пороговые значения

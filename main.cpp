@@ -33,7 +33,7 @@ int main()
 		cout << endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << endl;
 		cout << " get_common_divisor(20, 12) -> ";
 		if (auto res = sundry::get_common_divisor(20, 12))
-			cout << res.value();
+			cout << *res;
 		else
 			cout << "Невозможно вычислить общий делитель!";
 		cout << endl;
@@ -48,10 +48,9 @@ int main()
 	cout << sundry::find_item_by_interpolation(std::vector<int>{ -1, -2, 3, 4, 5 }, 4) << endl;
 
 	{
-		cout << endl << " - Поиск в списке из чисел последовательного непрерывного интервала(-ов) чисел, сумма которых равна искомому значению." << endl;
-		cout << " find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> ";
-		auto res = sundry::find_intervals(vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0);
-		for (const auto& p : res)
+		cout << endl << " - Поиск в списке чисел последовательного непрерывного интервала(-ов) чисел, сумма которых равна искомому значению." << endl;
+		cout << " find_intervals({ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> ";
+		for (const auto& p : sundry::find_intervals({ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0))
 			cout << "(" << p.first << ", " << p.second << ") ";
 		cout << endl;
 	}

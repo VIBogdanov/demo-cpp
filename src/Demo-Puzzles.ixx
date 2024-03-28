@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <stdexcept>
+#include <iterator>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -39,22 +40,22 @@ export namespace puzzles
 		// Попарно сравниваем целевые номера позиций для значений исходного списка.
 		// Если номера позиций не по возрастанию, то требуется перестановка
 		TIndex count_permutations{ 0 };
-		for (TIndex prev_idx{ 0 }, next_idx{ 0 }; const TValue& item : source_list)
+		for (TIndex prev_idx{ 0 }, target_idx{ 0 }; const TValue& source_item : source_list)
 		{
 			// На случай, если списки не согласованы по значениям
 			try
 			{
-				next_idx = target_indexes.at(item);
+				target_idx = target_indexes.at(source_item);
 			}
 			catch (const std::out_of_range&)
 			{
 				return -1;
 			}
 
-			if (prev_idx > next_idx)
+			if (prev_idx > target_idx)
 				++count_permutations;
 			else
-				prev_idx = next_idx;
+				prev_idx = target_idx;
 		}
 
 		return count_permutations;
@@ -91,14 +92,14 @@ export namespace puzzles
 
 		std::vector<TValue> _digits{};
 		_digits.reserve(digits.size());
-		auto _clear_last_digit = [](const auto& x) -> TValue { return (x < 0) ? -(x % 10) : x % 10;  };
+		auto get_near_number = [pages](const auto& last_digit) -> TValue
+			{
+				// На всякий случай отбрасываем минус и от многозначных чисел оставляем последнюю цифру
+				TValue _last_digit{ ((last_digit < 0) ? -last_digit : last_digit) % 10 };
+				return (pages - _last_digit) / 10 * 10 + _last_digit;
+			};
 		// Формируем список с ближайшими меньшими числами, оканчивающиеся на цифры из списка digits
-		for (const auto& last_digit : digits)
-		{
-			// Страхуемся от неожиданностей
-			TValue _last_digit = _clear_last_digit(last_digit);
-			_digits.emplace_back((pages - _last_digit) / 10 * 10 + _last_digit);
-		}
+		std::transform(digits.begin(), digits.end(), std::back_inserter(_digits), get_near_number);
 		// Полученный список обязательно должен быть отсортирован в обратном порядке
 		std::ranges::sort(_digits, [](const auto& a, const auto& b) { return b < a; });
 		// Заодно удаляем дубликаты
@@ -183,7 +184,7 @@ export namespace puzzles
 						++it_first_digit;
 						++it_last_digit;
 					}
-					// Иначе, если окно достигло конец списка цифр, выходим из цикла
+					// Иначе, если окно выборки достигло конец списка цифр, выходим из цикла
 					else it_first_digit = it_last_digit;
 				}
 			}

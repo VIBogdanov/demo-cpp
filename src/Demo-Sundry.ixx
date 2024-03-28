@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <numeric>
 export module Demo:Sundry;
 
 import :Assistools;
@@ -234,22 +235,19 @@ namespace
 				std::iter_swap(current_iter, _digit_iter);
 				// если первая цифра полученного числа после перестановки не равна 0,
 				// выполняем сортировку правой части числа
-				if (*_digits_list.begin() > 0)
+				if (*_digits_list.begin())
 				{
 					// сортируем правую (от найденной позиции) часть числа (по возрастанию или по убыванию)
 					// с учетом направления поиска
 					std::sort(_digits_list.rbegin(), current_iter,
 								[previous](const auto& a, const auto& b) -> bool
 									{ return (previous) ? a < b : b < a; } );
-
 					// Собираем из массива цифр результирующее число
-					std::ranges::for_each(std::as_const(_digits_list),
-						[&result](const auto& d) -> void { result = result * 10 + static_cast<TResult>(d); });
+					result = static_cast<TResult>(assistools::inumber_from_digits(_digits_list));
 				}
 				return result;
 			}
 		}
-
 		return result;
 	};
 
@@ -339,8 +337,6 @@ namespace
 //****************************************** Public code *************************************************
 export namespace sundry
 {
-	//constexpr int ZeroValue = int{ 0 };
-
 	/**
 	@brief Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида.
 
@@ -395,7 +391,7 @@ export namespace sundry
 	@example find_intervals(std::vector<int>{ 1, -3, 4, 5 }, 9) -> (2, 3)
 			 find_intervals(std::vector<int>{ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> (0, 1), (4, 6), (8, 9), (9, 10)
 
-	@param elements - Массив с данными контейнерного типа
+	@param numbers - Массив чисел контейнерного типа
 	@param target - Искомое значение
 
 	@return (std::vector<std::pair<int, int>>) Результирующий список диапазонов. Диапазоны задаются в виде
@@ -403,44 +399,48 @@ export namespace sundry
 		Если ни один диапазон не найден, возвращается пустой список.
 	*/
 	template <typename TContainer = std::vector<int>>
-		requires std::is_integral_v<typename TContainer::value_type>
-	auto find_intervals(const TContainer& elements, const typename TContainer::value_type& target)
+	requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
+	auto find_intervals(const TContainer& numbers, const typename TContainer::value_type& target)
 		-> std::vector<std::pair<typename TContainer::size_type, typename TContainer::size_type>>
 	{
 		using TIndex = typename TContainer::size_type;
 		using TElement = typename TContainer::value_type;
 
-		std::vector<std::pair<TIndex, TIndex>> result_list;
-		std::unordered_multimap<TElement, TIndex> sum_dict;
-		
-		// Суммируем элементы списка по нарастающей
-		TElement sum{ 0 };
-		for (TIndex idx{ 0 }; const auto& e : elements)
+		struct Ranges
 		{
-			sum = std::move(sum) + e;
+			TElement sum;
+			TElement target;
+			TIndex index;
 
-			// Если на очередной итерации полученная сумма равна искомому значению,
-			// заносим диапазон от 0 до текущей позиции в результирующий список.
-			if (sum == target)
-				result_list.emplace_back(0, idx);
+			std::vector<std::pair<TIndex, TIndex>> result_list;
+			std::unordered_multimap<TElement, TIndex> sum_dict;
 
-			//Ищем пару из уже вычисленных ранее сумм для значения (Sum - Target).
-			if (sum_dict.contains(sum - target))
+			Ranges(TElement _target) { target = _target, sum = 0; index = 0; }
+
+			void operator()(TElement number)
 			{
-				// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
-				// У одной и той же суммы возможно несколько индексов
-				auto [first, last] = sum_dict.equal_range(sum - target);
-				for (; first != last; ++first)
-					result_list.emplace_back(first->second + 1, idx);
+				// Суммируем элементы списка по нарастающей
+				sum += number;
+				// Если на очередной итерации полученная сумма равна искомому значению,
+				// заносим диапазон от 0 до текущей позиции в результирующий список.
+				if (sum == target)
+					result_list.emplace_back(0, index);
+				//Ищем пару из уже вычисленных ранее сумм для значения (Sum - Target).
+				if (sum_dict.contains(sum - target))
+				{
+					// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
+					// У одной и той же суммы возможно несколько индексов
+					auto [first, last] = sum_dict.equal_range(sum - target);
+					for (; first != last; ++first)
+						result_list.emplace_back(first->second + 1, index);
+				}
+				// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
+				sum_dict.emplace(sum, index);
+				++index;
 			}
+		};
 
-			// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
-			sum_dict.emplace(sum, idx);
-			++idx;
-		}
-
-		result_list.shrink_to_fit();
-		return result_list;
+		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).result_list;
 	};
 
 
@@ -576,7 +576,7 @@ export namespace sundry
     @return Найденное число. Если поиск безуспешен, возвращается 0.
 	*/
 	template <typename TNumber = int>
-		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto find_nearest_number(const TNumber& number, const bool& previous = true)
 		-> TNumber
 	{
