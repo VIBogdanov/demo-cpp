@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <queue>
 #include <stack>
@@ -9,7 +10,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <numeric>
 export module Demo:Sundry;
 
 import :Assistools;
@@ -203,28 +203,25 @@ namespace
 
 	template <typename TResult, typename TContainer, typename TIterator = typename TContainer::iterator>
 		requires std::ranges::range<TContainer>&&
-				 std::is_integral_v<typename TContainer::value_type>&&
-				 std::is_arithmetic_v<typename TContainer::value_type>
-	auto _do_find_nearest(const TResult& result_type,
-						  const TContainer& digits_list,
-						  const TIterator digit_iter,
-						  const bool& previous = true)
+				std::is_integral_v<typename TContainer::value_type>&&
+				std::is_arithmetic_v<typename TContainer::value_type>&&
+				std::is_convertible_v<typename TContainer::value_type, TResult>
+	auto _do_find_nearest(const TContainer& digits_list, const TIterator digit_iter, const bool& previous = true)
 		-> TResult
 	{
-		// Параметр result_type нужен только для определения корректного типа возвращаемого значения
-
+		// Шаблон TResult нужен только для определения корректного типа возвращаемого значения
 		TResult result{ 0 };
 
 		// создаем копию передаваемого списка, дабы не влиять на оригинальный список
 		TContainer _digits_list{ digits_list };
 		// Текущая цифра, с которой будем сравнивать
 		const auto _digit_iter{ std::ranges::next(_digits_list.rbegin(),
-									std::ranges::distance(digits_list.rbegin(), digit_iter)) };
+								std::ranges::distance(digits_list.rbegin(), digit_iter)) };
 		// Сравниваем значения итераторов в зависимости от направления поиска: большего или меньшего числа
 		auto _compare = [previous, _digit_iter](const auto _current_iter) -> bool
 						{ return (previous) ? *_current_iter > *_digit_iter : *_current_iter < *_digit_iter; };
 
-		// Просматриваем все цифры левее текущей позиции.
+		// Просматриваем все цифры левее текущей позиции. Используются реверсивные итераторы
 		for (auto current_iter{ std::ranges::next(_digit_iter) };
 			current_iter != _digits_list.rend(); ++current_iter)
 		{
@@ -238,7 +235,7 @@ namespace
 				if (*_digits_list.begin())
 				{
 					// сортируем правую (от найденной позиции) часть числа (по возрастанию или по убыванию)
-					// с учетом направления поиска
+					// с учетом направления поиска. Используются реверсивные итераторы
 					std::sort(_digits_list.rbegin(), current_iter,
 								[previous](const auto& a, const auto& b) -> bool
 									{ return (previous) ? a < b : b < a; } );
@@ -377,7 +374,6 @@ export namespace sundry
 		return (divisor) ? std::optional<TNumber>{divisor} : std::nullopt;
 	};
 
-
 	/**
 	@brief Поиск в списке из чисел последовательного непрерывного интервала(-ов) чисел,
 	сумма которых равна искомому значению.
@@ -399,25 +395,27 @@ export namespace sundry
 		Если ни один диапазон не найден, возвращается пустой список.
 	*/
 	template <typename TContainer = std::vector<int>>
-	requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
+		requires std::ranges::range<TContainer>&& std::is_integral_v<typename TContainer::value_type>
 	auto find_intervals(const TContainer& numbers, const typename TContainer::value_type& target)
 		-> std::vector<std::pair<typename TContainer::size_type, typename TContainer::size_type>>
 	{
 		using TIndex = typename TContainer::size_type;
-		using TElement = typename TContainer::value_type;
+		using TNumber = typename TContainer::value_type;
 
 		struct Ranges
 		{
-			TElement sum;
-			TElement target;
-			TIndex index;
+			TNumber sum{ 0 };
+			TIndex index{ 0 };
+			TNumber target;
 
-			std::vector<std::pair<TIndex, TIndex>> result_list;
-			std::unordered_multimap<TElement, TIndex> sum_dict;
+			using TResult = std::vector<std::pair<TIndex, TIndex>>;
 
-			Ranges(TElement _target) { target = _target, sum = 0; index = 0; }
+			TResult result_list;
+			std::unordered_multimap<TNumber, TIndex> sum_dict;
 
-			void operator()(TElement number)
+			Ranges(TNumber _target) : target{ _target } { }
+
+			void operator()(TNumber number)
 			{
 				// Суммируем элементы списка по нарастающей
 				sum += number;
@@ -438,11 +436,15 @@ export namespace sundry
 				sum_dict.emplace(sum, index);
 				++index;
 			}
+
+			TResult& intervals()& { return result_list; } //Оставлено для унификации. В данном алгоритме не используется
+			TResult&& intervals()&& { return std::move(result_list); }
+
 		};
-
-		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).result_list;
+		// По задумке for_each возвращает rvalue объект и при возврате используется перемещение результирующего списка,
+		// а не его копирование во временный список и возврат этой временной копии. Т.е. используется 2-й вариант intervals()
+		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).intervals();
 	};
-
 
 	/**
 	@brief Поиск элемента в массиве данных при помощи бинарного алгоритма. При поиске учитывается направление сортировки массива.
@@ -469,7 +471,6 @@ export namespace sundry
 		//Максимально обобщенный вариант для контейнеров
 		return _find_item_by_binary(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
 	};
-
 
 	/**
 	@brief Поиск элемента в массиве данных при помощи бинарного алгоритма. При поиске учитывается направление сортировки массива.
@@ -498,29 +499,29 @@ export namespace sundry
 			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), target);
 	};
 
-
 	/**
 	@brief Функция поиска заданного значения в одномерном числовом массиве контейнерного типа. В качестве алгоритма поиска
 	используется метод интерполяции.
-	
+
 	@details Алгоритм похож на бинарный поиск. Отличие в способе поиска срединного элемента.
-    При интерполяции производится попытка вычислить положение искомого элемента, а не просто поделить список
-    пополам.
-    Внимание!!! Входной массив данных обязательно должен быть отсортирован, иначе результат будет не определён.
+	При интерполяции производится попытка вычислить положение искомого элемента, а не просто поделить список
+	пополам.
+	Внимание!!! Входной массив данных обязательно должен быть отсортирован, иначе результат будет не определён.
 	Учитывается направление сортировки. Т.к. в алгоритме используются арифметические операции, список и искомое
 	значение должны быть числовыми. Строковые литералы не поддерживаются.
 
 	@example find_item_by_interpolation(std::vector<int>{ -1, -2, 3, 4, 5 }, 4) -> 3
 
-    @param elements - массив числовых данных для поиска
-    @param target - искомое значение
+	@param elements - массив числовых данных для поиска
+	@param target - искомое значение
 
-    @return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
+	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 
 	template <typename TContainer>
-		requires std::ranges::range<TContainer> && (!std::is_array_v<TContainer>) &&
-				 std::is_arithmetic_v<typename TContainer::value_type>
+		requires std::ranges::range<TContainer> &&
+				(!std::is_array_v<TContainer>) &&
+				std::is_arithmetic_v<typename TContainer::value_type>
 	auto find_item_by_interpolation(const TContainer& elements, const typename TContainer::value_type& target)
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
@@ -548,9 +549,7 @@ export namespace sundry
 	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 	template <typename T, std::size_t N>
-		requires
-			std::is_array_v<T[N]> &&
-			std::is_arithmetic_v<T>
+		requires std::is_array_v<T[N]> && std::is_arithmetic_v<T>
 	auto find_item_by_interpolation(const T(&elements)[N], const T& target)
 		-> std::make_signed_t<decltype(N)>
 	{
@@ -562,7 +561,6 @@ export namespace sundry
 			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), target);
 	};
 
-
 	/**
 	@brief Функция поиска ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр.
 
@@ -570,43 +568,39 @@ export namespace sundry
 			 find_nearest_number(273145, previous=false) -> 273154
 			 find_nearest_number(-273145) -> -273154
 
-    @param number - целое число, относительно которого осуществляется поиск. Допускаются отрицательные значения.
+	@param number - целое число, относительно которого осуществляется поиск. Допускаются отрицательные значения.
 	@param previous (bool) - Направление поиска: ближайшее меньшее или большее. По-умолчанию True - ближайшее меньшее.
 
-    @return Найденное число. Если поиск безуспешен, возвращается 0.
+	@return Найденное число. Если поиск безуспешен, возвращается 0.
 	*/
 	template <typename TNumber = int>
-	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto find_nearest_number(const TNumber& number, const bool& previous = true)
 		-> TNumber
 	{
-		TNumber result{ 0 };
+		// Раскладываем заданное число на отдельные цифры
+		auto digits_list{ assistools::inumber_to_digits(number) };
+		if (digits_list.size() < 2) return 0;
 		// Сохраняем знак числа и определяем направление поиска (больше или меньше заданного числа)
 		const TNumber sign_number{ (number < 0) ? -1 : 1 };
 		const bool is_previous{ (number < 0) ? !previous : previous };
-		// Разбиваем заданное число на отдельные цифры
-		auto digits_list{ assistools::inumber_to_digits(number) };
-		// список для накопления результатов поиска
-		std::vector<TNumber> result_list;
+		//Выставляем пороговые значения с учетом направления поиска
+		TNumber result{ (is_previous) ? std::numeric_limits<TNumber>::min()
+										: std::numeric_limits<TNumber>::max() };
 		// цикл перебора цифр заданного числа справа на лево (с хвоста к голове) кроме первой цифры
 		for (auto it_digit{ digits_list.rbegin() }; it_digit != std::ranges::prev(digits_list.rend()); ++it_digit)
-			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
-			// result передаем только для того, чтобы получить корректный тип возвращаемого значения
-			if (auto res{ _do_find_nearest(result, digits_list, it_digit, is_previous) })
-				result_list.emplace_back(res);
-		// Если список результирующих чисел не пуст, находим наибольшее или наименьшее число
-		// в зависимости от направления поиска и восстанавливаем знак числа.
-		if (!result_list.empty())
 		{
-			auto it_result = (is_previous)
-				? std::ranges::max_element(std::as_const(result_list))
-				: std::ranges::min_element(std::as_const(result_list));
-			result = (*it_result) * sign_number;
+			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
+			// <TNumber> передаем только для того, чтобы получить корректный тип возвращаемого значения
+			if (auto res{ _do_find_nearest<TNumber>(digits_list, it_digit, is_previous) })
+				result = (is_previous)
+				? (result < res) ? std::move(res) : result
+				: (res < result) ? std::move(res) : result;
 		}
-
-		return result;
+		// Если в процессе перебора искомое число было найдено, восстанавливаем исходный знак числа
+		return ((result != std::numeric_limits<TNumber>::min()) && (result != std::numeric_limits<TNumber>::max()))
+			? result * sign_number : 0;
 	};
-
 
 	/**
 	@brief Функция сортировки методом пузырька. Сортирует заданный список по месту.
@@ -615,7 +609,7 @@ export namespace sundry
 	значение, так и минимальное. На следующей итерации диапазон поиска сокращается не на один элемент, а на два.
 	Кроме того, реализована сортировка как по возрастанию, так и по убыванию.
 
-    @param first - Итератор, указывающий на первый элемент данных.
+	@param first - Итератор, указывающий на первый элемент данных.
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
@@ -662,7 +656,7 @@ export namespace sundry
 				is_swapped = false;
 			}
 			else
-				// Если за итерацию перестановок не было, то список уже отсортирован. Выходим из цикла
+				// Если за итерацию перестановок не было, то список уже отсортирован. Досрочно выходим из цикла
 				it_start = it_end;
 		}
 	};
@@ -675,13 +669,12 @@ export namespace sundry
 		sort_by_bubble(std::ranges::begin(data), std::ranges::end(data), revers);
 	};
 
-
 	/**
 	@brief Функция сортировки методом слияния. Сортирует заданный список по месту.
 
 	@details В отличии от классического метода не использует рекурсивные вызовы и не создает каскад списков.
 	Вместо этого создается список индексов для диапазонов сортировки, по которым происходит отбор
-    значений из исходного списка и их сортировка.
+	значений из исходного списка и их сортировка.
 
 	@param first - Итератор, указывающий на первый элемент данных.
 	@param last - Итератор, указывающий за последний элемент данных.
@@ -729,7 +722,7 @@ export namespace sundry
 		// Сортируем все полученные половины
 		while (!query_work.empty())
 		{
-			// Выбираем из очереди диапазоны начиная с меньших
+			// Выбираем из очереди диапазоны, начиная с меньших
 			auto [i_first, i_middle, i_last] = query_work.top();
 			query_work.pop();
 
@@ -741,12 +734,12 @@ export namespace sundry
 			std::vector<TItem> left_list{ it_current, it_right };
 			auto it_left{ left_list.begin() };
 			auto it_left_end{ left_list.end() }; //Не обязательно. Чисто для удобства.
-			
+
 			// Поэлементно сравниваем половины и сортируем исходный список
 			while ((it_left != it_left_end) && (it_right != it_right_end))
 				(_compare(it_left, it_right))
-					? *it_current++ = *it_left++
-					: *it_current++ = *it_right++;
+				? *it_current++ = *it_left++
+				: *it_current++ = *it_right++;
 			// Добавляем в результирующий список "хвост" только от левой части.
 			// Правая уже присутствует в исходном списке
 			if (it_left != it_left_end)
@@ -762,20 +755,19 @@ export namespace sundry
 		sort_by_merge(std::ranges::begin(data), std::ranges::end(data), revers);
 	};
 
-
 	/**
 	@brief Функция сортировки методом Shell. Заданный список сортируется по месту.
-	
+
 	@details Кроме классического метода формирования списки индексов для перестановки,
 	возможно использовать следующие методы:
-    - Hibbard
-    - Sedgewick
-    - Knuth
-    - Fibonacci
+	- Hibbard
+	- Sedgewick
+	- Knuth
+	- Fibonacci
 
-    Реализована двунаправленная сортировка.
+	Реализована двунаправленная сортировка.
 
-    @param first - Итератор, указывающий на первый элемент данных.
+	@param first - Итератор, указывающий на первый элемент данных.
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param method - Метод формирования списка индексов для перестановки.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
@@ -797,7 +789,7 @@ export namespace sundry
 		for (auto it_index{ indexes_list.crbegin() }; it_index != indexes_list.crend(); ++it_index)
 		{
 			auto i_index{ *it_index };
-			// Разбиваем диапазон исходных данных согласно индексу
+			// Разбиваем исходные данные на диапазоны согласно индексу
 			for (auto i_range{ i_index }; i_range < _size; ++i_range)
 				// Сортируем список в заданном диапазоне
 				for (auto i_current{ i_range }; i_current >= i_index; i_current -= i_index)
@@ -817,7 +809,6 @@ export namespace sundry
 	{
 		sort_by_shell(std::ranges::begin(data), std::ranges::end(data), method, revers);
 	};
-
 
 	/**
 	@brief Функция сортировки методом отбора. Заданный список сортируется по месту.
@@ -856,14 +847,14 @@ export namespace sundry
 			   потенциальный минимум текущего диапазона, тогда меняем местами
 			*/
 			if (_compare(it_start, it_end)) std::iter_swap(it_start, it_end);
-
+			// Перебираем элементы текущего диапазона
 			for (auto it_current{ it_start }; it_current != it_end; ++it_current)
 			{
 				// Если текущий элемент больше последнего в диапазоне, то это потенциальный максимум
 				if (_compare(it_current, it_max)) { it_max = it_current; is_swapped = true; }
 				// Одновременно проверяем на потенциальный минимум, сравнивая с первым элементом текущего диапазона
 				else if (_compare(it_min, it_current)) { it_min = it_current; is_swapped = true; }
-				// Выясняем, требуется ли перестановка на следующей итерации
+				// Выясняем, потребуется ли перестановка на следующей итерации
 				else if (!is_swapped && _compare(it_current, std::ranges::next(it_current))) is_swapped = true;
 			}
 
@@ -883,7 +874,7 @@ export namespace sundry
 				is_swapped = false;
 			}
 			else
-				// Если за итерацию перестановок не потребовалось, то список уже отсортирован. Выходим из цикла
+				// Если за итерацию перестановок не потребовалось, то список уже отсортирован. Досрочно выходим из цикла
 				it_start = it_end;
 		}
 	};

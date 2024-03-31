@@ -1,8 +1,8 @@
 ﻿module;
 #include <algorithm>
-#include <unordered_map>
-#include <stdexcept>
 #include <iterator>
+#include <stdexcept>
+#include <unordered_map>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -35,8 +35,8 @@ export namespace puzzles
 		// Формируем список из номеров позиций для каждого значения из целевого списка
 		// Само значение является ключом
 		std::unordered_map<TValue, TIndex> target_indexes;
-		for (TIndex idx{ 0 }; const TValue& item : target_list)
-			target_indexes.emplace(item, idx++);
+		for (TIndex index{ 0 }; const TValue& item : target_list)
+			target_indexes.emplace(item, index++);
 		// Попарно сравниваем целевые номера позиций для значений исходного списка.
 		// Если номера позиций не по возрастанию, то требуется перестановка
 		TIndex count_permutations{ 0 };
@@ -99,7 +99,7 @@ export namespace puzzles
 				return (pages - _last_digit) / 10 * 10 + _last_digit;
 			};
 		// Формируем список с ближайшими меньшими числами, оканчивающиеся на цифры из списка digits
-		std::transform(digits.begin(), digits.end(), std::back_inserter(_digits), get_near_number);
+		std::ranges::transform(digits, std::back_inserter(_digits), get_near_number);
 		// Полученный список обязательно должен быть отсортирован в обратном порядке
 		std::ranges::sort(_digits, [](const auto& a, const auto& b) { return b < a; });
 		// Заодно удаляем дубликаты
@@ -165,16 +165,18 @@ export namespace puzzles
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ _digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, N) };
+				std::vector<TNumber> _buff;
+				_buff.reserve(_size - N + 1);
 				while (it_first_digit != it_last_digit)
 				{
 					// Числа, начинающиеся с 0, пропускаем
 					if (*it_first_digit != 0)
 					{
-						// Комбинируем полученное число с оставшимися вне окна выборки цифрами
-						std::vector<TNumber> _buff(_digits.begin(), it_first_digit);
+						// Комбинируем полученное число с цифрами оставшимися вне окна выборки
+						_buff.assign(_digits.begin(), it_first_digit); // Цифры слева
 						// Формируем число из цифр, отобранных окном выборки
 						_buff.emplace_back(assistools::inumber_from_digits(it_first_digit, it_last_digit));
-						_buff.insert(_buff.end(), it_last_digit, _digits.end());
+						_buff.insert(_buff.end(), it_last_digit, _digits.end()); // Цифры справа
 						result.emplace_back(_buff);
 					}
 

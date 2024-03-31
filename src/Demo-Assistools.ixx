@@ -1,8 +1,8 @@
 ﻿module;
+#include <numeric>
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <numeric>
 export module Demo:Assistools;
 
 export namespace assistools
@@ -17,11 +17,11 @@ export namespace assistools
 	@return (vector<int>) Массив цифр.
 	*/
 	template <typename TNumber = int>
-	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
+		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<TNumber>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
-		std::vector<int> result;
+		std::vector<TNumber> result;
 
 		do
 			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
@@ -41,9 +41,9 @@ export namespace assistools
 	@return Целое число.
 	*/
 	template <std::input_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
-	requires
-		std::is_integral_v<typename TIterator::value_type> &&
-		std::is_arithmetic_v<typename TIterator::value_type>
+		requires
+			std::is_integral_v<typename TIterator::value_type> &&
+			std::is_arithmetic_v<typename TIterator::value_type>
 	auto inumber_from_digits(const TIterator first, const TSIterator last)
 		-> TIterator::value_type
 	{
@@ -86,7 +86,7 @@ export namespace assistools
 	"""
 	*/
 	template <typename TNumber = int>
-	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber())
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
@@ -137,7 +137,7 @@ export namespace assistools
 	@return Целочисленный результат возведения целого числа в заданную степень.
 	*/
 	template<typename TInt>
-	requires std::is_integral_v<TInt> && std::is_arithmetic_v<TInt>
+		requires std::is_integral_v<TInt> && std::is_arithmetic_v<TInt>
 	TInt ipow(TInt _base, TInt _exp)
 	{
 		// Обрабатываем пороговые значения
