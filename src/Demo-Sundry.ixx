@@ -35,7 +35,7 @@ export namespace sundry
 namespace
 {
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
-	auto _find_item_by_binary(const TIterator& first, const TIterator& last, const TItem& target)
+	auto _find_item_by_binary(const TIterator first, const TIterator last, const TItem& target)
 		-> std::make_signed_t <typename TIterator::difference_type>
 	{
 		// Получаем размер массива данных
@@ -85,9 +85,7 @@ namespace
 			if (*iter_element == target)
 				i_result = static_cast<TResult>(i_middle);
 			else
-				(target < *iter_element)
-					? (is_forward) ? i_last = i_middle - 1 : i_first = i_middle + 1
-					: (is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
+				((target < *iter_element) ^ is_forward) ? i_first = i_middle + 1 : i_last = i_middle - 1;
 		}
 
 		return i_result;
@@ -102,7 +100,7 @@ namespace
 
 	template <typename TIterator, typename TItem = typename TIterator::value_type>
 		requires std::is_arithmetic_v<TItem>
-	auto _find_item_by_interpolation(const TIterator& first, const TIterator& last, const TItem& target)
+	auto _find_item_by_interpolation(const TIterator first, const TIterator last, const TItem& target)
 		-> std::make_signed_t <typename TIterator::difference_type>
 	{
 		// Получаем размер массива данных
@@ -174,11 +172,9 @@ namespace
 				i_result = static_cast<TResult>(i_current);
 			else
 				// Одновременно смещаем итератор и индекс
-				(target < *current_element)
-					? (is_forward<bool>) ? (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1)
-										 : (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
-					: (is_forward<bool>) ? (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
-										 : (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1);
+				((target < *current_element) ^ is_forward<bool>)
+					? (std::advance(first_element, (i_current + 1) - i_first), i_first = i_current + 1)
+					: (std::advance(last_element, (i_current - 1) - i_last), i_last = i_current - 1);
 		}
 
 		return i_result;
@@ -593,9 +589,7 @@ export namespace sundry
 			// вызываем подпрограмму поиска большего или меньшего числа в зависимости от направления поиска
 			// <TNumber> передаем только для того, чтобы получить корректный тип возвращаемого значения
 			if (auto res{ _do_find_nearest<TNumber>(digits_list, it_digit, is_previous) })
-				result = (is_previous)
-				? (result < res) ? std::move(res) : result
-				: (res < result) ? std::move(res) : result;
+				result = (is_previous ^ (result < res)) ? result : std::move(res);
 		}
 		// Если в процессе перебора искомое число было найдено, восстанавливаем исходный знак числа
 		return ((result != std::numeric_limits<TNumber>::min()) && (result != std::numeric_limits<TNumber>::max()))

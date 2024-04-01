@@ -44,7 +44,7 @@ export namespace assistools
 		requires
 			std::is_integral_v<typename TIterator::value_type> &&
 			std::is_arithmetic_v<typename TIterator::value_type>
-	auto inumber_from_digits(const TIterator first, const TSIterator last)
+	auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
 		-> TIterator::value_type
 	{
 		using TNumber = typename std::iterator_traits<TIterator>::value_type; //Альтернативный вариант
@@ -57,7 +57,7 @@ export namespace assistools
 	requires std::ranges::range<TContainer> &&
 			 std::is_integral_v<typename TContainer::value_type> &&
 			 std::is_arithmetic_v<typename TContainer::value_type>
-	auto inumber_from_digits(const TContainer& digits)
+	auto inumber_from_digits(const TContainer& digits) noexcept
 		-> TContainer::value_type
 	{
 		return inumber_from_digits(std::ranges::begin(digits), std::ranges::end(digits));
@@ -87,7 +87,7 @@ export namespace assistools
 	*/
 	template <typename TNumber = int>
 		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber())
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
 		std::vector<std::pair<TNumber, TNumber>> result;
@@ -116,7 +116,7 @@ export namespace assistools
 			(_compare(next_index))
 				? result.emplace_back(current_index * sign, next_index * sign)
 				: result.emplace_back(current_index * sign, _data_size * sign);
-			current_index = std::move(next_index);
+			current_index = next_index;
 		}
 
 		result.shrink_to_fit();
@@ -138,7 +138,7 @@ export namespace assistools
 	*/
 	template<typename TInt>
 		requires std::is_integral_v<TInt> && std::is_arithmetic_v<TInt>
-	TInt ipow(TInt _base, TInt _exp)
+	constexpr TInt ipow(TInt _base, TInt _exp) noexcept
 	{
 		// Обрабатываем пороговые значения
 		if (_base == 1 || _exp == 0) return 1;
