@@ -17,11 +17,11 @@ export namespace assistools
 	@return (vector<int>) Массив цифр.
 	*/
 	template <typename TNumber = int>
-		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<TNumber>
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber> && std::is_convertible_v<TNumber, int>
+	constexpr auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
 	{
 		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
-		std::vector<TNumber> result;
+		std::vector<int> result;
 
 		do
 			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
@@ -41,26 +41,25 @@ export namespace assistools
 	@return Целое число.
 	*/
 	template <std::input_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
-		requires
-			std::is_integral_v<typename TIterator::value_type> &&
+	requires std::is_integral_v<typename TIterator::value_type>&&
 			std::is_arithmetic_v<typename TIterator::value_type>
-	auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
+	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
 		-> TIterator::value_type
 	{
 		using TNumber = typename std::iterator_traits<TIterator>::value_type; //Альтернативный вариант
 		auto get_number = [](TNumber num, const TNumber& dig) -> TNumber
 			{ return num * 10 + ((dig < 0) ? -dig : dig) % 10; };
 		return std::accumulate(first, last, 0, get_number);
-	}
+	};
 
 	template <typename TContainer = std::vector<int>>
-	requires std::ranges::range<TContainer> &&
-			 std::is_integral_v<typename TContainer::value_type> &&
-			 std::is_arithmetic_v<typename TContainer::value_type>
-	auto inumber_from_digits(const TContainer& digits) noexcept
-		-> TContainer::value_type
+	requires std::ranges::range<TContainer>&&
+			std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
+			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>
+	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
+		-> std::remove_cvref_t<TContainer>::value_type
 	{
-		return inumber_from_digits(std::ranges::begin(digits), std::ranges::end(digits));
+ 		return inumber_from_digits(std::ranges::begin(digits), std::ranges::end(digits));
 	};
 
 	/**
@@ -86,7 +85,7 @@ export namespace assistools
 	"""
 	*/
 	template <typename TNumber = int>
-		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
@@ -136,24 +135,24 @@ export namespace assistools
 
 	@return Целочисленный результат возведения целого числа в заданную степень.
 	*/
-	template<typename TInt>
-		requires std::is_integral_v<TInt> && std::is_arithmetic_v<TInt>
-	constexpr TInt ipow(TInt _base, TInt _exp) noexcept
+	template<typename TBase, typename TExp>
+	requires std::is_integral_v<TBase> && std::is_arithmetic_v<TBase> && std::is_integral_v<TExp>
+	constexpr TBase ipow(TBase i_base, TExp i_exp) noexcept
 	{
 		// Обрабатываем пороговые значения
-		if (_base == 1 || _exp == 0) return 1;
+ 		if (i_base == 1 || i_exp == 0) return 1;
 		// Случаи с отрицательной степенью
-		if (std::numeric_limits<TInt>::is_signed && _exp < 0)
-			return ((_base == 0) ? std::numeric_limits<TInt>::min()
-				: (_base != -1) ? 0 : (_exp & 1) ? -1 : 1);
+		if (std::numeric_limits<TExp>::is_signed && i_exp < 0)
+			return ((i_base == 0) ? std::numeric_limits<TBase>::min()
+				: (i_base != -1) ? 0 : (i_exp & 1) ? -1 : 1);
 
-		TInt res{ 1 };
+		TBase res{ 1 };
 		// Побитово считываем степень, начиная с младших разрядов (справа на лево)
 		// и выполняем вычисления в зависимости от значения полученного бита.
-		while (_exp) {
-			if (_exp & 1) res *= _base;
-			_base *= _base;
-			_exp >>= 1;
+		while (i_exp) {
+			if (i_exp & 1) res *= i_base;
+			i_base *= i_base;
+			i_exp >>= 1;
 		}
 
 		return res;

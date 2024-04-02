@@ -20,6 +20,10 @@ int main()
 		cout << endl;
 	}
 
+	cout << endl << " - Функция получения целого числа из набора цифр." << endl;
+	cout << " inumber_from_digits({ 2, 7, 0 }) -> ";
+	std::cout << assistools::inumber_from_digits({ 2, 7, 0 }) << endl;
+
 	{
 		cout << endl << " - Формирует список индексов диапазонов, на которые можно разбить список заданной длины." << endl;
 		cout << " get_ranges_index(50, 10) -> ";
@@ -81,7 +85,7 @@ int main()
 		cout << endl << " - Сортировка методом Shell." << endl;
 		cout << " sort_by_shell(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
 		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
-		sundry::sort_by_shell(vec, sundry::SortMethod::SHELL);
+		sundry::sort_by_shell(vec, sundry::SortMethod::KNUTH);
 		std::ranges::for_each(vec, [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
@@ -110,7 +114,7 @@ int main()
 	
 	{
 		cout << endl << " - Сформировать все возможные уникальные наборы чисел из указанных цифр." << endl;
-		cout << " get_combination_numbers(std::vector<int>{ 0, 2, 7 }) -> ";
+		cout << " get_combination_numbers({ 0, 2, 7 }) -> ";
 		auto res = puzzles::get_combination_numbers({ 0, 2, 7 });
 		std::cout << "{ ";
 		for (auto& e : res)
@@ -121,6 +125,8 @@ int main()
 		}
 		cout << "}" << endl;
 	}
+
+	assistools::ipow(2, 3);
 
 	return 0;
 }

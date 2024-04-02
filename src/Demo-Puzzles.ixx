@@ -127,16 +127,20 @@ export namespace puzzles
     @return Список уникальных комбинаций
 	*/
 	template <typename TContainer = std::vector<int>>
-	requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
-	auto get_combination_numbers(const TContainer& digits)
-		-> std::vector<std::vector<typename TContainer::value_type>>
+	requires std::ranges::range<TContainer> && std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>
+	auto get_combination_numbers(TContainer&& digits)
+		-> std::vector<std::vector<typename std::remove_cvref_t<TContainer>::value_type>>
 	{
-		using TNumber = typename TContainer::value_type;
+		using TNumber = typename std::remove_cvref_t<TContainer>::value_type;
+		using TResVector = std::vector<TNumber>;
 		// Сохраняем копию исходного списка для формирования комбинаций перестановок
-		TContainer _digits{ digits };
+		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный случай, но ограничен только vector
+		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
+		TResVector _digits{ std::make_move_iterator(std::ranges::begin(digits)),
+							std::make_move_iterator(std::ranges::end(digits)) };
 		auto _size = _digits.size();
 		// Результат - список списков
-		std::vector<std::vector<TNumber>> result{};
+		std::vector<TResVector> result;
 
 		switch (_size)
 		{
@@ -165,7 +169,7 @@ export namespace puzzles
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ _digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, N) };
-				std::vector<TNumber> _buff;
+				TResVector _buff;
 				_buff.reserve(_size - N + 1);
 				while (it_first_digit != it_last_digit)
 				{

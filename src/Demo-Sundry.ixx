@@ -297,7 +297,7 @@ namespace
 
 		case sundry::SortMethod::KNUTH:
 			auto _knuth = [](const TIndex& exp) -> TIndex
-				{ const TIndex _base = 3;  return (assistools::ipow(_base, exp) - 1) >> 1; };
+				{ return (assistools::ipow(static_cast<decltype(exp)>(3), exp) - 1) >> 1; };
 
 			for (TIndex i{ 1 }, res{ _knuth(i) }; res <= (list_len / 3); res = _knuth(++i))
 				indexes.emplace_back(res);
