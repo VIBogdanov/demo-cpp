@@ -33,16 +33,17 @@ namespace
 		using TResult = std::vector<TDigits>;
 		using TFuture = std::shared_future<TResult>;
 		using TPoolSize = std::ptrdiff_t; // Тип ptrdiff_t выбран по аналогии с конструктором std::counting_semaphore
-		TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
+		const TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
 
 		// Итоговый список, в котором будем собирать результаты от запланированных задач
 		TResult result_list;
 		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
 		// переупаковки и запуска "ленивых" задач. По сути это очередь задач.
+		// Тип контейнера выбран list, т.к. планируются частые вставки и удаления по всему списку.
 		std::list<TFuture> task_list;
 		// Пул задач для ограничения максимального количества одновременно запущенных задач.
 		// Если не задан, по умолчанию устанавливается равным числу ядер процессора
-		std::counting_semaphore<>* task_pool;
+		std::unique_ptr<std::counting_semaphore<>> task_pool;
 
 		/*
 		Функция, которая запускается как отдельная асинхронная задача.
@@ -119,18 +120,21 @@ namespace
 			// На случай, если std::thread::hardware_concurrency() не сработает
 			if (_pool_size == 0) _pool_size = _DEFAULT_POOL_SIZE_;
 			//Инициализируем пул задач в виде счетчика-семафора
-			task_pool = new std::counting_semaphore(_pool_size);
+			task_pool = std::make_unique<std::counting_semaphore<>>(_pool_size);
 		}
 
 		~GetCombinations()
 		{
 			// Если остались незавершенные задачи, ожидаем...
-			std::for_each(std::execution::par,
-						task_list.cbegin(),
-						task_list.cend(),
-						[](auto t) { if (t.valid()) t.wait(); });
-			task_list.clear();
-			delete task_pool;
+			if (!task_list.empty())
+			{
+				std::for_each(std::execution::par,
+					task_list.cbegin(),
+					task_list.cend(),
+					[](auto t) { if (t.valid()) t.wait(); });
+
+				task_list.clear();
+			}
 		}
 
 		// Копирование запрещаем, т.к. пул асинхронных задач должен выполняться в рамках единственного экземпляра класса.
@@ -139,9 +143,9 @@ namespace
 
 		void add_digits(TDigits digits, std::launch policy = std::launch::async)
 		{
-			//Планируем на выполнение асинхронные задачи. При этом задачи могут быть и "ленивыми".
+			// Планируем на выполнение асинхронные задачи. При этом задачи могут быть "ленивыми".
 			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
-			task_list.emplace_back(std::async(policy, &GetCombinations::make_combination, this, std::move(digits)));
+			task_list.emplace_back(std::async(std::move(policy), &GetCombinations::make_combination, this, std::move(digits)));
 		}
 
 		void add_digits(TNumber number, std::launch policy = std::launch::async)
