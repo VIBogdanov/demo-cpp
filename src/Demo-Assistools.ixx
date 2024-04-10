@@ -1,4 +1,5 @@
 ﻿module;
+#include <algorithm>
 #include <numeric>
 #include <type_traits>
 #include <utility>
@@ -14,20 +15,24 @@ export namespace assistools
 
 	@param number - Заданное целое число. По умолчанию 0.
 
-	@return (vector<int>) Массив цифр.
+	@return Массив цифр.
 	*/
 	template <typename TNumber = int>
-	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber> && std::is_convertible_v<TNumber, int>
-	constexpr auto inumber_to_digits(const TNumber& number = TNumber() /*Integer number*/) noexcept -> std::vector<int>
+	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
+		-> std::vector<TNumber>
 	{
-		TNumber _num{ (number < 0) ? -number : number }; // Знак числа отбрасываем
-		std::vector<int> result;
-
+		if (number < 0) number = -number; // Знак числа отбрасываем
+		std::vector<TNumber> result;
+		
 		do
-			result.emplace(result.cbegin(), static_cast<int>(_num % 10));
-		while (_num /= 10);
+			result.emplace_back(number % 10);
+		while (number /= 10);
 
 		result.shrink_to_fit();
+		// Можно было отказаться от reverse и в цикле использовать вставку в начало вектора,
+		// но это каждый раз приводит к сдвигу всех элементов вектора, что медленно
+		std::ranges::reverse(result);
 		return result;
 	};
 
@@ -40,26 +45,28 @@ export namespace assistools
 
 	@return Целое число.
 	*/
-	template <std::input_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
-	requires std::is_integral_v<typename TIterator::value_type>&&
-			std::is_arithmetic_v<typename TIterator::value_type>
+	template <typename TResult = int,
+		std::input_iterator TIterator,
+		std::sentinel_for<TIterator> TSIterator>
+	requires std::is_integral_v<std::iter_value_t<TIterator>>&&
+			std::is_arithmetic_v<std::iter_value_t<TIterator>>
 	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
-		-> TIterator::value_type
+		-> TResult
 	{
-		using TNumber = typename std::iterator_traits<TIterator>::value_type; //Альтернативный вариант
-		auto get_number = [](TNumber num, const TNumber& dig) -> TNumber
+		// TResult используется для указания типа возвращаемого значения отличного от содержимого итератора
+		using TDigit = std::iter_value_t<TIterator>;
+		auto get_number = [](TResult num, const TDigit& dig) -> TResult
 			{ return num * 10 + ((dig < 0) ? -dig : dig) % 10; };
-		return std::accumulate(first, last, 0, get_number);
+		return std::accumulate(first, last, TResult(0), get_number);
 	};
 
-	template <typename TContainer = std::vector<int>>
-	requires std::ranges::range<TContainer>&&
-			std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
+	template <typename TResult = int, typename TContainer = std::vector<int>>
+	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
 			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>
 	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
-		-> std::remove_cvref_t<TContainer>::value_type
+		-> TResult
 	{
- 		return inumber_from_digits(std::ranges::begin(digits), std::ranges::end(digits));
+ 		return inumber_from_digits<TResult>(std::ranges::begin(digits), std::ranges::end(digits));
 	};
 
 	/**
@@ -129,6 +136,8 @@ export namespace assistools
 	@details В дополнении к стандартной библиотеке, которая не имеет перегруженной версии
 	функции std::pow(), возвращающей целочисленное значение для возводимых в степень целых чисел.
 	Используется алгоритм быстрого возведения в степень по схеме "справа на лево".
+	Примечание! Данная функция может возводить в степень не только целые числа. Тип возвращаемого
+	результата зависит от типа первого параметра, передаваемого в функцию.
 
 	@param base: Возводимое в степень целое число.
 	@param exp: Степень возведения.
@@ -136,8 +145,8 @@ export namespace assistools
 	@return Целочисленный результат возведения целого числа в заданную степень.
 	*/
 	template<typename TBase, typename TExp>
-	requires std::is_integral_v<TBase> && std::is_arithmetic_v<TBase> && std::is_integral_v<TExp>
-	constexpr TBase ipow(TBase i_base, TExp i_exp) noexcept
+	requires std::is_arithmetic_v<TBase> && std::is_integral_v<TExp>
+	constexpr TBase ipow(TBase i_base, TExp i_exp)
 	{
 		// Обрабатываем пороговые значения
  		if (i_base == 1 || i_exp == 0) return 1;
@@ -151,8 +160,8 @@ export namespace assistools
 		// и выполняем вычисления в зависимости от значения полученного бита.
 		while (i_exp) {
 			if (i_exp & 1) res *= i_base;
-			i_base *= i_base;
 			i_exp >>= 1;
+			if (i_exp) i_base *= i_base;
 		}
 
 		return res;

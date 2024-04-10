@@ -3,10 +3,204 @@
 #include <iterator>
 #include <stdexcept>
 #include <unordered_map>
+#include <future>
+#include <semaphore>
+#include <thread>
 export module Demo:Puzzles;
 
 import :Assistools;
 
+//****************************************** Private code *************************************************
+namespace
+{
+	/**
+	@brief Вспомогательный класс для функции get_combination_numbers_async().
+
+	@details Получает от вызывающей функции наборы цифр, из которых формирует комбинации чисел.
+	При этом как формирование комбинаций, так и получение результатов происходит в асинхронном режиме.
+
+	@param poolsize: Для конструктора можно задать размер пула одновременно исполняемых задач. По умолчанию равен количеству ядер CPU.
+
+	@param policy: Для методов add_digits и add_number можно указать политику запуска всех или конкретной асинхронной задачи.
+
+	@return Список всех возможных комбинаций.
+	*/
+	template <class TNumber = int>
+	class GetCombinations
+	{
+		using TDigits = std::vector<TNumber>;
+		using TResult = std::vector<TDigits>;
+		using TFuture = std::shared_future<TResult>;
+		using TPoolSize = std::ptrdiff_t; // Тип ptrdiff_t выбран по аналогии с конструктором std::counting_semaphore
+		TPoolSize _DEFAULT_POOL_SIZE{ 4 };
+
+		// Итоговый список, в котором будем собирать результаты от запланированных задач
+		TResult result_list;
+		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
+		// переупаковки и запуска "ленивых" задач
+		std::list<TFuture> task_list;
+		// Пул задач для ограничения максимального количества одновременно запущенных задач.
+		// Если не задан, по умолчанию устанавливается равным числу ядер процессора
+		std::counting_semaphore<>* task_pool;
+
+		/*
+		Функция, которая запускается как отдельная асинхронная задача.
+		Получаем копию параметра digits, т.к. вызывающая функция будет менять набор цифр
+		не дожидаясь пока асинхронная задача отработает. Для асинхронной задачи необходима автономность данных.
+		*/
+		auto make_combination(TDigits digits) -> TResult
+		{
+			// Получаем из пула задач разрешение на запуск. Если пул полон, ждем своей очереди
+			task_pool->acquire();
+
+			// Каждая задача собирает свою автономную часть результатов, которые далее в цикле
+			// асинхронного получения результатов соберутся в итоговый список
+			TResult result_buff{};
+
+			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
+			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
+			if (digits.empty())
+				return result_buff;
+			else
+			{
+				// Добавляем комбинацию из одиночных цифр
+				result_buff.emplace_back(digits);
+				// Сразу же добавляем число из всего набора цифр
+				if ((digits.size() > 1) && (*digits.begin() != 0))
+					result_buff.push_back({ assistools::inumber_from_digits(digits) });
+			}
+			/*
+			Кроме одиночных, формируем комбинации с двух - , трех - ... N - числами.
+			Максимальный N равен размеру заданного списка одиночных цифр минус 1,
+			т.к. число из полного набора цифр уже сформировано.
+			Заканчиваем двухзначными, т.к. комбинация из одиночных цифр уже сформирована
+			*/
+			for (auto _size{ digits.size() - 1 }; 1 < _size; --_size)
+			{
+				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
+				auto it_first_digit{ digits.begin() };
+				auto it_last_digit{ std::ranges::next(it_first_digit, _size) };
+				TDigits _buff;
+				_buff.reserve(_size);
+				while (it_first_digit != it_last_digit)
+				{
+					// Числа, начинающиеся с 0, пропускаем
+					if (*it_first_digit != 0)
+					{
+						// Комбинируем полученное число с цифрами оставшимися вне окна выборки
+						_buff.assign(digits.begin(), it_first_digit); // Цифры слева
+						// Формируем число из цифр, отобранных окном выборки
+						_buff.emplace_back(assistools::inumber_from_digits(it_first_digit, it_last_digit));
+						_buff.insert(_buff.end(), it_last_digit, digits.end()); // Цифры справа
+						result_buff.emplace_back(_buff);
+					}
+
+					if (it_last_digit != digits.end())
+					{
+						//Смещаем окно выборки
+						++it_first_digit;
+						++it_last_digit;
+					}
+					// Иначе, если окно выборки достигло конца списка цифр, выходим из цикла
+					else it_first_digit = it_last_digit;
+				}
+			}
+			// Освобождаем место в очереди пула задач
+			task_pool->release();
+			// Это еще не окончательный результат, а лишь промежуточный для конкретной асинхронной задачи
+			return result_buff;
+		}
+
+	public:
+		explicit GetCombinations(const TPoolSize poolsize = 0) noexcept
+		{
+			auto _pool_size = (poolsize > 0) ? poolsize : std::thread::hardware_concurrency();
+			// На случай, если std::thread::hardware_concurrency() не сработает
+			if (_pool_size == 0) _pool_size = _DEFAULT_POOL_SIZE;
+			//Инициализируем пул задач в виде счетчика-семафора
+			task_pool = new std::counting_semaphore(_pool_size);
+		}
+
+		~GetCombinations()
+		{
+			task_list.clear();
+			delete task_pool;
+		}
+
+		// Копирование запрещаем, т.к. пул асинхронных задач должен выполняться в рамках единственного экземпляра класса.
+		GetCombinations(const GetCombinations&) = delete;
+		GetCombinations& operator=(const GetCombinations&) = delete;
+
+		void add_number(TNumber number = TNumber(), std::launch policy = std::launch::async)
+		{
+			// Числа распарсиваются в цифры и из них формируется асинхронная задача
+			GetCombinations::add_digits(assistools::inumber_to_digits(std::move(number)), std::move(policy));
+		}
+
+		void add_digits(TDigits digits, std::launch policy = std::launch::async)
+		{
+			//Планируем на выполнение асинхронные задачи. При этом задачи могут быть и "ленивыми".
+			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
+			task_list.emplace_back(std::async(policy, &GetCombinations::make_combination, this, std::move(digits)));
+		}
+
+		auto get_combinations() -> decltype(result_list)
+		{
+			/* По запросу из вызывающей функции начинаем собирать итоговый результат в асинхронном режиме.
+			Т.е. если какая-либо задача из списка еще не отработала и не может предоставить результат своей работы,
+			не ждем ее завершения, а переходим к следующей задаче из списка и проверяем ее готовность.
+			При готовности задачи, добавляем результат ее работы в итоговый результат и удаляем задачу из списка.
+			Повторяем цикл проверки готовности задач пока список задач не опустеет.
+			P.S. Если встречается "ленивая" задача, то ее следует запустить, но при этом не ждать пока она отработает.
+			Для этого переупаковываем "ленивые" задачи в асинхронные и добавляем в список задач. Старую "ленивую" задачу
+			из сриска удаляем. Делается это через копирование фьючерса "ленивой" задачи и вызова его метода get, что
+			приводит к запуску "ленивой" задачи, но уже в качестве асинхронной.*/
+
+			//Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
+			while (!task_list.empty())
+			{
+				//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
+				for (auto it_future = task_list.begin(); it_future != task_list.end();)
+				{
+					if ((*it_future).valid())
+					{
+						// Метод wait_for нужен только для получения статусов, потому вызываем с нулевой задержкой.
+						//Для каждой задачи отрабатываем два статуса: ready и deferred
+						switch ((*it_future).wait_for(std::chrono::milliseconds(0)))
+						{
+						case std::future_status::ready: //Задача отработала и результат готов
+							//Перемещаем полученный от задачи результат в итоговый список
+							std::ranges::move((*it_future).get(), std::back_inserter(result_list));
+							//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
+							it_future = task_list.erase(it_future);
+							break;
+						case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
+							//Переупаковываем "ленивую" задачу в асинхронную и запускаем.
+							task_list.emplace_back(std::async(std::launch::async, [lazy_future = (*it_future)] { return lazy_future.get(); }));
+							//Удаляем "ленивую" задачу из списка задач
+							it_future = task_list.erase(it_future);
+							break;
+						case std::future_status::timeout:
+						default:
+							// Если задача еще не отработала и результат не готов, пропускаем и переходим к следующей.
+							// При этом задача остается в списке и будет еще раз проверена на готовность в следующем цикле
+							++it_future;
+							break;
+						}
+					}
+					else
+						//Если фьючерс не валиден, удаляем соответствующую ему задачу из списка без обработки
+						it_future = task_list.erase(it_future);
+				}
+			}
+			// Сортируем для удобства восприятия (не обязательно).
+			std::ranges::sort(result_list);
+			return result_list;
+		}
+	};
+}
+
+//****************************************** Public code *************************************************
 export namespace puzzles
 {
 	/**
@@ -127,20 +321,22 @@ export namespace puzzles
     @return Список уникальных комбинаций
 	*/
 	template <typename TContainer = std::vector<int>>
-	requires std::ranges::range<TContainer> && std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>
+	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>
 	auto get_combination_numbers(TContainer&& digits)
-		-> std::vector<std::vector<typename std::remove_cvref_t<TContainer>::value_type>>
+		-> std::vector< std::vector<typename std::remove_cvref_t<TContainer>::value_type> >
 	{
+		//Приходится очищать TContainer от ссылки, т.к. lvalue параметр передается как ссылка (lvalue&)
 		using TNumber = typename std::remove_cvref_t<TContainer>::value_type;
-		using TResVector = std::vector<TNumber>;
+		using TDigits = std::vector<TNumber>;
+
 		// Сохраняем копию исходного списка для формирования комбинаций перестановок
-		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный случай, но ограничен только vector
+		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
 		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
-		TResVector _digits{ std::make_move_iterator(std::ranges::begin(digits)),
-							std::make_move_iterator(std::ranges::end(digits)) };
+		TDigits _digits{ std::ranges::begin(digits),
+							std::ranges::end(digits) };
 		auto _size = _digits.size();
 		// Результат - список списков
-		std::vector<TResVector> result;
+		std::vector<TDigits> result;
 
 		switch (_size)
 		{
@@ -169,7 +365,7 @@ export namespace puzzles
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ _digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, N) };
-				TResVector _buff;
+				TDigits _buff;
 				_buff.reserve(_size - N + 1);
 				while (it_first_digit != it_last_digit)
 				{
@@ -181,7 +377,7 @@ export namespace puzzles
 						// Формируем число из цифр, отобранных окном выборки
 						_buff.emplace_back(assistools::inumber_from_digits(it_first_digit, it_last_digit));
 						_buff.insert(_buff.end(), it_last_digit, _digits.end()); // Цифры справа
-						result.emplace_back(_buff);
+						result.emplace_back(std::move(_buff));
 					}
 
 					if (it_last_digit != _digits.end())
@@ -201,4 +397,59 @@ export namespace puzzles
 		std::ranges::sort(result);
 		return result;
 	};
+
+	template <typename TNumber = int>
+	requires std::is_integral_v<TNumber>
+	auto get_combination_numbers(TNumber number = TNumber())
+		-> std::vector< std::vector<TNumber> >
+	{
+		return get_combination_numbers(assistools::inumber_to_digits(std::move(number)));
+	};
+
+	/**
+	@brief Асинхронная версия функции get_combination_numbers().
+
+	@details Для данной задачи асинхронность смысла не имеет, разве что
+	для очень больших цифр. Асинхронность выполнена в качестве учебных
+	целей и с прицелом на создание универсального класса пула задач.
+
+	@param digits - Список заданных цифр
+
+	@return Список уникальных комбинаций
+	*/
+	template <typename TContainer = std::vector<int>>
+		requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>
+	auto get_combination_numbers_async(TContainer&& digits)
+		-> std::vector< std::vector<typename std::remove_cvref_t<TContainer>::value_type> >
+	{
+		//Приходится очищать TContainer от ссылки, т.к. lvalue параметр передается как ссылка (lvalue&)
+		using TNumber = typename std::remove_cvref_t<TContainer>::value_type;
+		using TDigits = std::vector<TNumber>;
+
+		// Сохраняем копию исходного списка для формирования комбинаций перестановок
+		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
+		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
+		TDigits _digits{ std::ranges::begin(digits),
+						 std::ranges::end(digits) };
+
+		switch (_digits.size())
+		{
+		case 1:
+			return std::vector<TDigits>{_digits};
+		case 0:
+			return std::vector<TDigits>{};
+		}
+		// Класс для запуска асинхронных задач
+		GetCombinations<TNumber> gc;
+
+		// Формируем следующую комбинацию из одиночных цифр
+		// Каждая комбинается передается в класс GetCombinations, который для обработки
+		// каждой комбинации запускает отдельную асинхронную задачу
+		do gc.add_digits(_digits);
+		while (std::next_permutation(_digits.begin(), _digits.end()));
+		// Запрашиваем у класса GetCombinations дождаться завершения асинхронных задач,
+		// получить результаты их работы и собрать итоговый результирующий список перестановок
+		return gc.get_combinations();
+	};
+
 } 

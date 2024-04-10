@@ -34,13 +34,13 @@ export namespace sundry
 //****************************************** Private code *************************************************
 namespace
 {
-	template <typename TIterator, typename TItem = typename TIterator::value_type>
+	template <typename TIterator, typename TItem = std::iter_value_t<TIterator>>
 	auto _find_item_by_binary(const TIterator first, const TIterator last, const TItem& target)
-		-> std::make_signed_t <typename TIterator::difference_type>
+		-> std::make_signed_t <std::iter_difference_t<TIterator>>
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
-
+		
 		using TIndex = decltype(_size);
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
 		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");  //Купируем тонкую ошибку
@@ -93,20 +93,17 @@ namespace
 
 
 	//Объявление разно типовой переменной. Реализацию см. ниже в теле функции _find_item_by_interpolation()
-	namespace {
-		template <typename T>
-		T is_forward;
-	}
+	template <typename T> T is_forward;
 
-	template <typename TIterator, typename TItem = typename TIterator::value_type>
+	template <typename TIterator, typename TItem = std::iter_value_t<TIterator>>
 		requires std::is_arithmetic_v<TItem>
 	auto _find_item_by_interpolation(const TIterator first, const TIterator last, const TItem& target)
-		-> std::make_signed_t <typename TIterator::difference_type>
+		-> std::make_signed_t <std::iter_difference_t<TIterator>>
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
 
-		using TIndex = typename TIterator::difference_type;
+		using TIndex = std::iter_difference_t<TIterator>;
 		using TResult = std::make_signed_t<TIndex>;  //Оставлено для возможности установить иной тип возврата вручную
 		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");
 
@@ -189,7 +186,6 @@ namespace
 	перестановку цифр и сортирует правую часть числа по возрастанию или убыванию в зависимости от
 	направления поиска.
 
-    @param result_type - используется только для определения корректного типа возвращаемого значения
     @param digits_list - массив цифр исходного числа
 	@param digit_iter - текущая позиция цифры, относительно которой выполняется перестановка
 	@param previous (bool) - Направление поиска: ближайшее большее или меньшее. True - меньшее, False - большее
@@ -236,7 +232,8 @@ namespace
 								[previous](const auto& a, const auto& b) -> bool
 									{ return (previous) ? a < b : b < a; } );
 					// Собираем из массива цифр результирующее число
-					result = static_cast<TResult>(assistools::inumber_from_digits(_digits_list));
+					// Дабы избежать применения static_cast, задаем для inumber_from_digits тип возвращаемого значения
+					result = assistools::inumber_from_digits<TResult>(_digits_list);
 				}
 				return result;
 			}
@@ -266,10 +263,10 @@ namespace
 		std::vector<TIndex> indexes;
 
 	public:
-		GetIndexes(const TIndex& list_len = 0, const sundry::SortMethod method = sundry::SortMethod::SHELL);
+		GetIndexes(const TIndex& list_len = TIndex(), const sundry::SortMethod method = sundry::SortMethod::SHELL);
 		// Объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему
-		auto crbegin() const { return indexes.crbegin(); };
-		auto crend() const { return indexes.crend(); };
+		auto crbegin() const { return indexes.crbegin(); }
+		auto crend() const { return indexes.crend(); }
 	};
 
 	template <class TIndex>
@@ -279,6 +276,7 @@ namespace
 		switch (method)
 		{
 		case sundry::SortMethod::HIBBARD:
+			// (1 << i) = 2^i
 			for (TIndex i{ 1 }, res{ (1 << i) - 1 }; res <= list_len; res = (1 << ++i) - 1)
 				indexes.emplace_back(res);
 			break;
@@ -304,17 +302,10 @@ namespace
 			break;
 
 		case sundry::SortMethod::FIBONACCI:
-		// В отличии от классической последовательности (1, 1, 2, 3, 5...) реализует (1, 2, 3, 5...)
-		{ 
-			for (TIndex prev{ 1 }, next{ 1 }; next <= list_len;)
-			{
+			// В отличии от классической последовательности (1, 1, 2, 3, 5...) реализует (1, 2, 3, 5...)
+			for (TIndex prev{ 1 }, next{ 1 }; next <= list_len; prev = std::exchange(next, (next + prev)))
 				indexes.emplace_back(next);
-				TIndex _next{ next };
-				next += std::move(prev);
-				prev = std::move(_next);
-			}
-		}
-		break;
+			break;
 
 		case sundry::SortMethod::SHELL:
 		default:
@@ -353,7 +344,7 @@ export namespace sundry
 		requires
 			std::is_integral_v<TNumber> &&
 			std::is_arithmetic_v<TNumber>
-	auto get_common_divisor(const TNumber& number_a = 0, const TNumber& number_b = 0)
+	auto get_common_divisor(const TNumber& number_a = TNumber(), const TNumber& number_b = TNumber())
 		-> std::optional<TNumber>
 	{
 		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
@@ -409,9 +400,9 @@ export namespace sundry
 			TResult result_list;
 			std::unordered_multimap<TNumber, TIndex> sum_dict;
 
-			Ranges(TNumber _target) : target{ _target } { }
+			Ranges(TNumber target_) : target{ target_ } { }
 
-			void operator()(TNumber number)
+			void operator()(const TNumber& number)
 			{
 				// Суммируем элементы списка по нарастающей
 				sum += number;
@@ -424,22 +415,23 @@ export namespace sundry
 				{
 					// Если пара найдена, извлекаем индексы и формируем результирующие диапазоны.
 					// У одной и той же суммы возможно несколько индексов
-					auto [first, last] = sum_dict.equal_range(sum - target);
-					for (; first != last; ++first)
-						result_list.emplace_back(first->second + 1, index);
+					auto [it_first, it_last] = sum_dict.equal_range(sum - target);
+					for (; it_first != it_last; ++it_first)
+						result_list.emplace_back(it_first->second + 1, index);
 				}
 				// Сохраняем очередную сумму и ее индекс в словаре, где ключ - сама сумма.
 				sum_dict.emplace(sum, index);
 				++index;
 			}
 
-			TResult& intervals()& { return result_list; } //Оставлено для унификации. В данном алгоритме не используется
-			TResult&& intervals()&& { return std::move(result_list); }
+			TResult& get_ranges()& { return result_list; } //Оставлено для унификации. В данном алгоритме не используется
+			TResult&& get_ranges()&& { return std::move(result_list); }
 
 		};
-		// По задумке for_each возвращает rvalue объект и при возврате используется перемещение результирующего списка,
-		// а не его копирование во временный список и возврат этой временной копии. Т.е. используется 2-й вариант intervals()
-		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).intervals();
+		// По задумке for_each возвращает временный объект Ranges как rvalue, что приводит к вызову 2-й версии get_ranges().
+		// Это позволяет при возврате из функции использовать перемещение результирующего списка,
+		// а не его копирование во временный список и возврат этой временной копии.
+		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).get_ranges();
 	};
 
 	/**
@@ -465,7 +457,7 @@ export namespace sundry
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
 		//Максимально обобщенный вариант для контейнеров
-		return _find_item_by_binary(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
+		return _find_item_by_binary(elements.begin(), elements.end(), std::move(target)); //span не поддерживает cbegin/cend
 	};
 
 	/**
@@ -490,9 +482,9 @@ export namespace sundry
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
+			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, std::move(target));
 		else
-			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), target);
+			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), std::move(target));
 	};
 
 	/**
@@ -522,7 +514,7 @@ export namespace sundry
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
 		//Максимально обобщенный вариант для контейнеров
-		return _find_item_by_interpolation(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
+		return _find_item_by_interpolation(elements.begin(), elements.end(), std::move(target)); //span не поддерживает cbegin/cend
 	};
 
 
@@ -552,9 +544,9 @@ export namespace sundry
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, std::move(target));
 		else
-			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), target);
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), std::move(target));
 	};
 
 	/**
@@ -660,7 +652,7 @@ export namespace sundry
 		requires std::ranges::range<TContainer>
 	void sort_by_bubble(TContainer&& data, const bool& revers = false)
 	{
-		sort_by_bubble(std::ranges::begin(data), std::ranges::end(data), revers);
+		sort_by_bubble(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
 
 	/**
@@ -683,7 +675,7 @@ export namespace sundry
 		if (_size < 2) return;
 
 		using TIndex = decltype(_size);
-		using TItem = typename TIterator::value_type;
+		using TItem = std::iter_value_t<TIterator>;
 		using TTuple = std::tuple<TIndex, TIndex, TIndex>;
 
 		// Итоговый список индексов, по которым сортируется исходный список данных
@@ -746,7 +738,7 @@ export namespace sundry
 		requires std::ranges::range<TContainer>
 	void sort_by_merge(TContainer&& data, const bool& revers = false)
 	{
-		sort_by_merge(std::ranges::begin(data), std::ranges::end(data), revers);
+		sort_by_merge(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
 
 	/**
@@ -801,7 +793,7 @@ export namespace sundry
 		requires std::ranges::range<TContainer>
 	void sort_by_shell(TContainer&& data, SortMethod method = SortMethod::SHELL, const bool& revers = false)
 	{
-		sort_by_shell(std::ranges::begin(data), std::ranges::end(data), method, revers);
+		sort_by_shell(std::ranges::begin(data), std::ranges::end(data), std::move(method), std::move(revers));
 	};
 
 	/**
@@ -831,8 +823,8 @@ export namespace sundry
 		//Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
 		bool is_swapped{ false };
 
-		auto _compare = [revers](const auto prev, const auto next) -> bool
-			{ return (revers) ? *prev < *next : *next < *prev; };
+		auto _compare = [revers](const auto it_prev, const auto it_next) -> bool
+			{ return (revers) ? *it_prev < *it_next : *it_next < *it_prev; };
 		// Перебираем диапазоны, сокращая длину каждого следующего диапазона на 2
 		while (it_start != it_end)
 		{
@@ -878,6 +870,6 @@ export namespace sundry
 		requires std::ranges::range<TContainer>
 	void sort_by_selection(TContainer&& data, const bool& revers = false)
 	{
-		sort_by_selection(std::ranges::begin(data), std::ranges::end(data), revers);
+		sort_by_selection(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
 }

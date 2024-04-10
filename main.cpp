@@ -3,6 +3,7 @@
 #include <iostream>
 #include <list>
 #include <vector>
+#include <chrono>
 
 import Demo;
 
@@ -15,7 +16,7 @@ int main()
 	{
 		cout << endl << " - Функция преобразования целого числа в набор цифр." << endl;
 		cout << " inumber_to_digits(12340) -> ";
-		auto res = assistools::inumber_to_digits(12340);
+		auto res = assistools::inumber_to_digits(12340L);
 		std::ranges::for_each(std::as_const(res), [](const auto& n) { cout << n << ' '; });
 		cout << endl;
 	}
@@ -47,7 +48,7 @@ int main()
 		cout << endl << " - Поиск в списке чисел последовательного непрерывного интервала(-ов) чисел, сумма которых равна искомому значению." << endl;
 		cout << " find_intervals({ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0) -> ";
 		for (const auto& p : sundry::find_intervals({ 1, -1, 4, 3, 2, 1, -3, 4, 5, -5, 5 }, 0))
-			cout << "(" << p.first << ", " << p.second << ") ";
+			cout << "[" << p.first << ", " << p.second << "] ";
 		cout << endl;
 	}
 
@@ -61,7 +62,7 @@ int main()
 
 	cout << endl << " - Поиск ближайшего целого числа, которое меньше или больше заданного и состоит из тех же цифр." << endl;
 	cout << " find_nearest_number(273145) -> ";
-	cout << sundry::find_nearest_number(273145) << endl;
+	cout << sundry::find_nearest_number(273145L) << endl;
 	
 	{
 		cout << endl << " - Сортировки методом пузырька." << endl;
@@ -85,7 +86,7 @@ int main()
 		cout << endl << " - Сортировка методом Shell." << endl;
 		cout << " sort_by_shell(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
 		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
-		sundry::sort_by_shell(vec, sundry::SortMethod::KNUTH);
+		sundry::sort_by_shell(vec, sundry::SortMethod::FIBONACCI);
 		std::ranges::for_each(vec, [](const auto& n) { std::cout << n << ", "; });
 		cout << endl;
 	}
@@ -114,8 +115,8 @@ int main()
 	
 	{
 		cout << endl << " - Сформировать все возможные уникальные наборы чисел из указанных цифр." << endl;
-		cout << " get_combination_numbers({ 0, 2, 7 }) -> ";
-		auto res = puzzles::get_combination_numbers({ 0, 2, 7 });
+		cout << " get_combination_numbers_async({ 0, 2, 7 }) -> ";
+		auto res = puzzles::get_combination_numbers_async(std::list<long>{ 0, 2, 7 });
 		std::cout << "{ ";
 		for (auto& e : res)
 		{
@@ -125,8 +126,6 @@ int main()
 		}
 		cout << "}" << endl;
 	}
-
-	assistools::ipow(2, 3);
 
 	return 0;
 }
