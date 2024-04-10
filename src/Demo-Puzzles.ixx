@@ -6,6 +6,7 @@
 #include <future>
 #include <semaphore>
 #include <thread>
+#include  <execution>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -32,12 +33,12 @@ namespace
 		using TResult = std::vector<TDigits>;
 		using TFuture = std::shared_future<TResult>;
 		using TPoolSize = std::ptrdiff_t; // Тип ptrdiff_t выбран по аналогии с конструктором std::counting_semaphore
-		TPoolSize _DEFAULT_POOL_SIZE{ 4 };
+		TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
 
 		// Итоговый список, в котором будем собирать результаты от запланированных задач
 		TResult result_list;
 		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
-		// переупаковки и запуска "ленивых" задач
+		// переупаковки и запуска "ленивых" задач. По сути это очередь задач.
 		std::list<TFuture> task_list;
 		// Пул задач для ограничения максимального количества одновременно запущенных задач.
 		// Если не задан, по умолчанию устанавливается равным числу ядер процессора
@@ -116,13 +117,18 @@ namespace
 		{
 			auto _pool_size = (poolsize > 0) ? poolsize : std::thread::hardware_concurrency();
 			// На случай, если std::thread::hardware_concurrency() не сработает
-			if (_pool_size == 0) _pool_size = _DEFAULT_POOL_SIZE;
+			if (_pool_size == 0) _pool_size = _DEFAULT_POOL_SIZE_;
 			//Инициализируем пул задач в виде счетчика-семафора
 			task_pool = new std::counting_semaphore(_pool_size);
 		}
 
 		~GetCombinations()
 		{
+			// Если остались незавершенные задачи, ожидаем...
+			std::for_each(std::execution::par,
+						task_list.cbegin(),
+						task_list.cend(),
+						[](auto t) { if (t.valid()) t.wait(); });
 			task_list.clear();
 			delete task_pool;
 		}
@@ -131,12 +137,6 @@ namespace
 		GetCombinations(const GetCombinations&) = delete;
 		GetCombinations& operator=(const GetCombinations&) = delete;
 
-		void add_number(TNumber number = TNumber(), std::launch policy = std::launch::async)
-		{
-			// Числа распарсиваются в цифры и из них формируется асинхронная задача
-			GetCombinations::add_digits(assistools::inumber_to_digits(std::move(number)), std::move(policy));
-		}
-
 		void add_digits(TDigits digits, std::launch policy = std::launch::async)
 		{
 			//Планируем на выполнение асинхронные задачи. При этом задачи могут быть и "ленивыми".
@@ -144,17 +144,25 @@ namespace
 			task_list.emplace_back(std::async(policy, &GetCombinations::make_combination, this, std::move(digits)));
 		}
 
+		void add_digits(TNumber number, std::launch policy = std::launch::async)
+		{
+			// Числа распарсиваются в цифры и из них формируется асинхронная задача
+			GetCombinations::add_digits(assistools::inumber_to_digits(std::move(number)), std::move(policy));
+		}
+
 		auto get_combinations() -> decltype(result_list)
 		{
-			/* По запросу из вызывающей функции начинаем собирать итоговый результат в асинхронном режиме.
+			/*
+			По запросу из вызывающей функции начинаем собирать итоговый результат в асинхронном режиме.
 			Т.е. если какая-либо задача из списка еще не отработала и не может предоставить результат своей работы,
 			не ждем ее завершения, а переходим к следующей задаче из списка и проверяем ее готовность.
 			При готовности задачи, добавляем результат ее работы в итоговый результат и удаляем задачу из списка.
 			Повторяем цикл проверки готовности задач пока список задач не опустеет.
 			P.S. Если встречается "ленивая" задача, то ее следует запустить, но при этом не ждать пока она отработает.
 			Для этого переупаковываем "ленивые" задачи в асинхронные и добавляем в список задач. Старую "ленивую" задачу
-			из сриска удаляем. Делается это через копирование фьючерса "ленивой" задачи и вызова его метода get, что
-			приводит к запуску "ленивой" задачи, но уже в качестве асинхронной.*/
+			из списка удаляем. Делается это через копирование фьючерса "ленивой" задачи и вызова его метода get в рамках
+			асинхронной задачи, что приводит к запуску "ленивой" задачи, но уже в качестве асинхронной
+			*/
 
 			//Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
 			while (!task_list.empty())
@@ -175,7 +183,7 @@ namespace
 							it_future = task_list.erase(it_future);
 							break;
 						case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
-							//Переупаковываем "ленивую" задачу в асинхронную и запускаем.
+							//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
 							task_list.emplace_back(std::async(std::launch::async, [lazy_future = (*it_future)] { return lazy_future.get(); }));
 							//Удаляем "ленивую" задачу из списка задач
 							it_future = task_list.erase(it_future);
@@ -440,16 +448,16 @@ export namespace puzzles
 			return std::vector<TDigits>{};
 		}
 		// Класс для запуска асинхронных задач
-		GetCombinations<TNumber> gc;
+		GetCombinations<TNumber> combination_numbers;
 
 		// Формируем следующую комбинацию из одиночных цифр
-		// Каждая комбинается передается в класс GetCombinations, который для обработки
-		// каждой комбинации запускает отдельную асинхронную задачу
-		do gc.add_digits(_digits);
+		// Каждая комбинация передается в класс GetCombinations, который для их обработки
+		// запускает отдельную асинхронную задачу
+		do combination_numbers.add_digits(_digits);
 		while (std::next_permutation(_digits.begin(), _digits.end()));
 		// Запрашиваем у класса GetCombinations дождаться завершения асинхронных задач,
 		// получить результаты их работы и собрать итоговый результирующий список перестановок
-		return gc.get_combinations();
+		return combination_numbers.get_combinations();
 	};
 
 } 
