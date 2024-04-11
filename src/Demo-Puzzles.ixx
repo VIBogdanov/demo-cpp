@@ -36,14 +36,16 @@ namespace
 		const TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
 
 		// Итоговый список, в котором будем собирать результаты от запланированных задач
-		TResult result_list;
+		TResult result_list{};
 		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
 		// переупаковки и запуска "ленивых" задач. По сути это очередь задач.
 		// Тип контейнера выбран list, т.к. планируются частые вставки и удаления по всему списку.
-		std::list<TFuture> task_list;
+		std::list<TFuture> task_list{};
 		// Пул задач для ограничения максимального количества одновременно запущенных задач.
 		// Если не задан, по умолчанию устанавливается равным числу ядер процессора
-		std::unique_ptr<std::counting_semaphore<>> task_pool;
+		std::unique_ptr<std::counting_semaphore<>> task_pool = nullptr;
+		// Флаг досрочного завершения задач
+		std::atomic_flag stop_all_task = ATOMIC_FLAG_INIT;
 
 		/*
 		Функция, которая запускается как отдельная асинхронная задача.
@@ -77,14 +79,14 @@ namespace
 			т.к. число из полного набора цифр уже сформировано.
 			Заканчиваем двухзначными, т.к. комбинация из одиночных цифр уже сформирована
 			*/
-			for (auto _size{ digits.size() - 1 }; 1 < _size; --_size)
+			for (auto _size{ digits.size() - 1 }; (1 < _size) && !stop_all_task.test(std::memory_order_relaxed); --_size)
 			{
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, _size) };
 				TDigits _buff;
 				_buff.reserve(_size);
-				while (it_first_digit != it_last_digit)
+				while ((it_first_digit != it_last_digit) && !stop_all_task.test(std::memory_order_relaxed))
 				{
 					// Числа, начинающиеся с 0, пропускаем
 					if (*it_first_digit != 0)
@@ -114,9 +116,9 @@ namespace
 		}
 
 	public:
-		explicit GetCombinations(const TPoolSize poolsize = 0) noexcept
+		explicit GetCombinations(TPoolSize poolsize = 0) noexcept
 		{
-			auto _pool_size = (poolsize > 0) ? poolsize : std::thread::hardware_concurrency();
+			auto _pool_size = (poolsize > 0) ? std::move(poolsize) : std::thread::hardware_concurrency();
 			// На случай, если std::thread::hardware_concurrency() не сработает
 			if (_pool_size == 0) _pool_size = _DEFAULT_POOL_SIZE_;
 			//Инициализируем пул задач в виде счетчика-семафора
@@ -128,6 +130,7 @@ namespace
 			// Если остались незавершенные задачи, ожидаем...
 			if (!task_list.empty())
 			{
+				stop_all_task.test_and_set(std::memory_order_relaxed);
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
 					task_list.cend(),
@@ -342,10 +345,10 @@ export namespace puzzles
 		using TDigits = std::vector<TNumber>;
 
 		// Сохраняем копию исходного списка для формирования комбинаций перестановок
-		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
+		//TDigits _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
 		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
 		TDigits _digits{ std::ranges::begin(digits),
-							std::ranges::end(digits) };
+						std::ranges::end(digits) };
 		auto _size = _digits.size();
 		// Результат - список списков
 		std::vector<TDigits> result;
@@ -421,9 +424,9 @@ export namespace puzzles
 	/**
 	@brief Асинхронная версия функции get_combination_numbers().
 
-	@details Для данной задачи асинхронность смысла не имеет, разве что
-	для очень больших цифр. Асинхронность выполнена в качестве учебных
-	целей и с прицелом на создание универсального класса пула задач.
+	@details Для данной задачи асинхронность смысла не имеет из-за значительных
+	затрат на создание потоков в сравнении с синхронной версией. Асинхронность
+	выполнена в качестве учебных целей и с прицелом на создание универсального класса пула задач.
 
 	@param digits - Список заданных цифр
 
@@ -439,7 +442,7 @@ export namespace puzzles
 		using TDigits = std::vector<TNumber>;
 
 		// Сохраняем копию исходного списка для формирования комбинаций перестановок
-		//std::vector<TNumber> _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
+		//TDigits _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
 		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
 		TDigits _digits{ std::ranges::begin(digits),
 						 std::ranges::end(digits) };
