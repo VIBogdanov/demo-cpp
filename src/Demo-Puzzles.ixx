@@ -54,6 +54,11 @@ namespace
 		*/
 		auto make_combination(TDigits digits) -> TResult
 		{
+			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
+			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
+			if (digits.empty() || stop_all_task.test(std::memory_order_relaxed))
+				return TResult{};
+
 			// Получаем из пула задач разрешение на запуск. Если пул полон, ждем своей очереди
 			task_pool->acquire();
 
@@ -61,18 +66,12 @@ namespace
 			// асинхронного получения результатов соберутся в итоговый список
 			TResult result_buff{};
 
-			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
-			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
-			if (digits.empty())
-				return result_buff;
-			else
-			{
-				// Добавляем комбинацию из одиночных цифр
-				result_buff.emplace_back(digits);
-				// Сразу же добавляем число из всего набора цифр
-				if ((digits.size() > 1) && (*digits.begin() != 0))
-					result_buff.push_back({ assistools::inumber_from_digits(digits) });
-			}
+			// Добавляем комбинацию из одиночных цифр
+			result_buff.emplace_back(digits);
+			// Сразу же добавляем число из всего набора цифр
+			if ((digits.size() > 1) && (*digits.begin() != 0))
+				result_buff.push_back({ assistools::inumber_from_digits(digits) });
+
 			/*
 			Кроме одиночных, формируем комбинации с двух - , трех - ... N - числами.
 			Максимальный N равен размеру заданного списка одиночных цифр минус 1,
@@ -131,6 +130,7 @@ namespace
 			if (!task_list.empty())
 			{
 				stop_all_task.test_and_set(std::memory_order_relaxed);
+				
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
 					task_list.cend(),
