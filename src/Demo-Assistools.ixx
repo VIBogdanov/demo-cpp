@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <mutex>
 export module Demo:Assistools;
 
 export namespace assistools
@@ -166,4 +167,79 @@ export namespace assistools
 
 		return res;
 	};
+
+	/**
+	@brief Позволяет создавать иерархически зависимые мьютексы. В цепочки иерархических мьютексов
+	уровень следующего блокируемого мьютекса не может быть больше предыдущего.
+
+	@details Пример использования:
+		hmutex high_mutex(10000);
+		hmutex low_mutex(5000);
+
+		void same_fn()
+		{
+			std::lock_guard<low_mutex> lm(low_mutex);
+			return;
+		}
+
+		void fn()
+		{   // Сначала блокируется мьютекс с высоким уровнем, затем с низким. Наоборот - ошибка
+			std::lock_guard<high_mutex> hm(high_mutex);
+			same_fn();
+		}
+	*/
+	class hmutex
+	{
+		// Важно, чтобы переменная this_thread_level была статической в рамках текущего потока.
+		// Это позволяет для каждого отдельного потока создавать свои уровни иерархий мьютексов.
+		static thread_local unsigned long this_thread_level;
+		std::mutex _hmutex;
+		unsigned long current_level; // Задаваемый уровень иерархии
+		unsigned long previous_level{ 0 }; // Для сохранения предыдущего уровня иерархии
+
+		void check_level()
+		{
+			if (this_thread_level <= current_level)
+				throw std::logic_error("mutex hierarchy violated");
+		}
+
+		void update_level()
+		{
+			previous_level = this_thread_level;
+			this_thread_level = current_level;
+		}
+
+	public:
+		explicit hmutex(unsigned long level) : current_level{ level } {}
+		// Копирование и перемещение запрещены
+		hmutex(const hmutex&) = delete;
+		hmutex& operator=(const hmutex&) = delete;
+		hmutex(hmutex&&) = delete;
+		hmutex& operator=(hmutex&&) = delete;
+
+		void lock()
+		{
+			check_level();
+			_hmutex.lock();
+			update_level();
+		}
+
+		void unlock()
+		{
+			this_thread_level = previous_level;
+			_hmutex.unlock();
+		}
+
+		bool try_lock()
+		{
+			check_level();
+			if (!_hmutex.try_lock())
+				return false;
+			update_level();
+			return true;
+		}
+	};
+
+	// Инициализируем статическую переменную класса hmutex
+	thread_local unsigned long hmutex::this_thread_level{ ULONG_MAX };
 }
