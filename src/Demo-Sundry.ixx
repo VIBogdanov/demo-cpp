@@ -563,7 +563,7 @@ export namespace sundry
 	*/
 	template <typename TNumber = int>
 		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto find_nearest_number(const TNumber& number, const bool& previous = true)
+	auto find_nearest_number(const TNumber& number, bool previous = true)
 		-> TNumber
 	{
 		// Раскладываем заданное число на отдельные цифры
@@ -601,7 +601,7 @@ export namespace sundry
 	*/
 	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
 		requires std::permutable<TIterator>
-	void sort_by_bubble(TIterator first, TSIterator last, const bool& revers = false)
+	void sort_by_bubble(TIterator first, TSIterator last, bool revers = false)
 	{
 		if (first == last) return;
 		// Устанавливаем итераторы на первый и последний элементы данных.
@@ -650,7 +650,7 @@ export namespace sundry
 	// Перегруженный вариант
 	template <typename TContainer>
 		requires std::ranges::range<TContainer>
-	void sort_by_bubble(TContainer&& data, const bool& revers = false)
+	void sort_by_bubble(TContainer&& data, bool revers = false)
 	{
 		sort_by_bubble(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
@@ -668,7 +668,7 @@ export namespace sundry
 	*/
 	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
 		requires std::permutable<TIterator>
-	void sort_by_merge(TIterator first, TSIterator last, const bool& revers = false)
+	void sort_by_merge(TIterator first, TSIterator last, bool revers = false)
 	{
 		// Получаем размер массива данных
 		auto _size{ std::ranges::distance(first, last) };
@@ -736,7 +736,7 @@ export namespace sundry
 	// Перегруженный вариант
 	template <typename TContainer>
 		requires std::ranges::range<TContainer>
-	void sort_by_merge(TContainer&& data, const bool& revers = false)
+	void sort_by_merge(TContainer&& data, bool revers = false)
 	{
 		sort_by_merge(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
@@ -760,7 +760,7 @@ export namespace sundry
 	*/
 	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
 		requires std::permutable<TIterator>
-	void sort_by_shell(TIterator first, TSIterator last, SortMethod method = SortMethod::SHELL, const bool& revers = false)
+	void sort_by_shell(TIterator first, TSIterator last, SortMethod method = SortMethod::SHELL, bool revers = false)
 	{
 		// Получаем размер исходного массива данных
 		auto _size{ std::ranges::distance(first, last) };
@@ -791,7 +791,7 @@ export namespace sundry
 	// Перегруженный вариант
 	template <typename TContainer>
 		requires std::ranges::range<TContainer>
-	void sort_by_shell(TContainer&& data, SortMethod method = SortMethod::SHELL, const bool& revers = false)
+	void sort_by_shell(TContainer&& data, SortMethod method = SortMethod::SHELL, bool revers = false)
 	{
 		sort_by_shell(std::ranges::begin(data), std::ranges::end(data), std::move(method), std::move(revers));
 	};
@@ -811,7 +811,7 @@ export namespace sundry
 	*/
 	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
 		requires std::permutable<TIterator>
-	void sort_by_selection(TIterator first, TSIterator last, const bool& revers = false)
+	void sort_by_selection(TIterator first, TSIterator last, bool revers = false)
 	{
 		if (first == last) return;
 		// В качестве стартового диапазона начальный и конечные элементы исходного списка
@@ -868,7 +868,7 @@ export namespace sundry
 	// Перегруженный вариант
 	template <typename TContainer>
 		requires std::ranges::range<TContainer>
-	void sort_by_selection(TContainer&& data, const bool& revers = false)
+	void sort_by_selection(TContainer&& data, bool revers = false)
 	{
 		sort_by_selection(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};

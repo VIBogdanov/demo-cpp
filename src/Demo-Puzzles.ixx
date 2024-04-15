@@ -69,7 +69,7 @@ namespace
 			// Добавляем комбинацию из одиночных цифр
 			result_buff.emplace_back(digits);
 			// Сразу же добавляем число из всего набора цифр
-			if ((digits.size() > 1) && (*digits.begin() != 0))
+			if ((digits.size() > 1) && (*digits.begin() != 0) && !stop_all_task.test(std::memory_order_relaxed))
 				result_buff.push_back({ assistools::inumber_from_digits(digits) });
 
 			/*
@@ -129,7 +129,7 @@ namespace
 			// Если остались незавершенные задачи, ожидаем...
 			if (!task_list.empty())
 			{
-				stop_all_task.test_and_set(std::memory_order_relaxed);
+				stop_all_task.test_and_set();
 				
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
@@ -157,6 +157,11 @@ namespace
 			GetCombinations::add_digits(assistools::inumber_to_digits(std::move(number)), std::move(policy));
 		}
 
+		void stop_combinations()
+		{
+			stop_all_task.test_and_set();
+		}
+
 		auto get_combinations() -> decltype(result_list)
 		{
 			/*
@@ -172,7 +177,7 @@ namespace
 			*/
 
 			//Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
-			while (!task_list.empty())
+			while (!task_list.empty() && !stop_all_task.test(std::memory_order_relaxed))
 			{
 				//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
 				for (auto it_future = task_list.begin(); it_future != task_list.end();)
@@ -190,10 +195,15 @@ namespace
 							it_future = task_list.erase(it_future);
 							break;
 						case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
-							//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
-							task_list.emplace_back(std::async(std::launch::async, [lazy_future = (*it_future)] { return lazy_future.get(); }));
-							//Удаляем "ленивую" задачу из списка задач
-							it_future = task_list.erase(it_future);
+							if (!stop_all_task.test(std::memory_order_relaxed))
+							{
+								//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
+								task_list.emplace_back(std::async(std::launch::async, [lazy_future = (*it_future)] { return lazy_future.get(); }));
+								//Удаляем "ленивую" задачу из списка задач
+								it_future = task_list.erase(it_future);
+							}
+							else
+								++it_future;
 							break;
 						case std::future_status::timeout:
 						default:
