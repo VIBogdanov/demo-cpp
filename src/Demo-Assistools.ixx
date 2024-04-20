@@ -18,7 +18,7 @@ export namespace assistools
 
 	@return Массив цифр.
 	*/
-	template <typename TNumber = int>
+	template <typename TNumber>
 	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
 		-> std::vector<TNumber>
@@ -92,7 +92,7 @@ export namespace assistools
 	@return vector<std::pair<int, int>>: Список пар с начальным и конечным индексами диапазона.
 	"""
 	*/
-	template <typename TNumber = int>
+	template <typename TNumber>
 	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
 		-> std::vector<std::pair<TNumber, TNumber>>
@@ -161,8 +161,7 @@ export namespace assistools
 		// и выполняем вычисления в зависимости от значения полученного бита.
 		while (i_exp) {
 			if (i_exp & 1) res *= i_base;
-			i_exp >>= 1;
-			if (i_exp) i_base *= i_base;
+			if (i_exp >>= 1) i_base *= i_base;
 		}
 
 		return res;
@@ -192,7 +191,7 @@ export namespace assistools
 	{
 		// Важно, чтобы переменная this_thread_level была статической в рамках текущего потока.
 		// Это позволяет для каждого отдельного потока создавать свои уровни иерархий мьютексов.
-		static thread_local unsigned long this_thread_level;
+		inline static thread_local unsigned long this_thread_level{ ULONG_MAX };
 		std::mutex _hmutex;
 		unsigned long current_level; // Задаваемый уровень иерархии
 		unsigned long previous_level{ 0 }; // Для сохранения предыдущего уровня иерархии
@@ -240,6 +239,4 @@ export namespace assistools
 		}
 	};
 
-	// Инициализируем статическую переменную класса hmutex
-	thread_local unsigned long hmutex::this_thread_level{ ULONG_MAX };
 }

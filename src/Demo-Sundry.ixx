@@ -264,9 +264,14 @@ namespace
 
 	public:
 		GetIndexes(const TIndex& list_len = TIndex(), const sundry::SortMethod method = sundry::SortMethod::SHELL);
-		// Объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему
-		auto crbegin() const { return indexes.crbegin(); }
-		auto crend() const { return indexes.crend(); }
+		// Для обхода "вручную" объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему.
+		auto crbegin() const noexcept { return indexes.crbegin(); }
+		auto crend() const noexcept { return indexes.crend(); }
+		// Методы begin() и end() обеспечат поэлементный обход: for(element : list) {}
+		// Т.к. алгоритм сортировки требует обход от большего к меньшему, подменяем методы begin()/end() на rbegin()/rend()
+		auto begin() const noexcept { return indexes.rbegin(); }
+		auto end() const noexcept { return indexes.rend(); }
+		auto size() const noexcept { return indexes.size(); }
 	};
 
 	template <class TIndex>
@@ -506,7 +511,7 @@ export namespace sundry
 	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
 
-	template <typename TContainer>
+	template <typename TContainer = std::vector<int>>
 		requires std::ranges::range<TContainer> &&
 				(!std::is_array_v<TContainer>) &&
 				std::is_arithmetic_v<typename TContainer::value_type>
@@ -561,7 +566,7 @@ export namespace sundry
 
 	@return Найденное число. Если поиск безуспешен, возвращается 0.
 	*/
-	template <typename TNumber = int>
+	template <typename TNumber >
 		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	auto find_nearest_number(const TNumber& number, bool previous = true)
 		-> TNumber
@@ -767,14 +772,10 @@ export namespace sundry
 		if (_size < 2) return;
 		// Учитываем направление сортировки
 		auto _compare = [&revers](const auto& it_left, const auto& it_right) -> bool
-			{ return (revers) ? *it_right > *it_left : *it_left > *it_right; };
-		// Вспомогательный класс формирует список индексов исходя
-		// из размера исходных данных и заданного метода
-		GetIndexes indexes_list(_size, method);
-		// Полученные индексы обрабатываем от большего к меньшему
-		for (auto it_index{ indexes_list.crbegin() }; it_index != indexes_list.crend(); ++it_index)
-		{
-			auto i_index{ *it_index };
+			{ return (revers) ? *it_left < *it_right : *it_right < *it_left; };
+		// Вспомогательный класс GetIndexes формирует список индексов исходя из размера исходных данных и заданного метода
+		// Полученные индексы обрабатываем от большего к меньшему. Класс GetIndexes сам обеспечит нужный порядок перебора.
+		for (const auto& i_index : GetIndexes{ _size, method })
 			// Разбиваем исходные данные на диапазоны согласно индексу
 			for (auto i_range{ i_index }; i_range < _size; ++i_range)
 				// Сортируем список в заданном диапазоне
@@ -785,7 +786,6 @@ export namespace sundry
 					if (_compare(it_left, it_right)) std::iter_swap(it_left, it_right);
 					else break; // Если перестановок больше не требуется, досрочно выходим из цикла
 				}
-		}
 	};
 
 	// Перегруженный вариант
