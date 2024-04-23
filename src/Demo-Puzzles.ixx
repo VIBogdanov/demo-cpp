@@ -44,27 +44,27 @@ namespace
 		// Пул задач для ограничения максимального количества одновременно запущенных задач.
 		// По умолчанию устанавливается равным числу ядер процессора
 		std::unique_ptr<std::counting_semaphore<>> task_pool{ nullptr };
-		// Флаг досрочного завершения задач
-		std::atomic_flag stop_all_task_flag = ATOMIC_FLAG_INIT;
 		// Регулирует одновременный доступ к task_list из нескольких потоков
 		std::mutex task_list_mutex;
 		// Отдельный поток для фоновой сборки результатов завершенных асинхронных задач
 		std::jthread get_result_thread;
 		// Для отправки запроса на останов для фонового потока предварительной сборки результата
 		std::stop_source stop_get_result_thread;
-		// Ожидание готовности результатов для фонового процесса сборки
+		// Отправка запроса на останов всех запущенных асинхронных задач
+		std::stop_source stop_all_thread;
+		// Ожидание готовности результатов для фонового процесса сборки результата
 		std::condition_variable result_ready;
 		// Счетчик завершенных асинхронных задач с готовыми результатами
 		std::atomic<unsigned int> done_task_count{ 0 };
 
 		void stop_all_task()
 		{
-			stop_all_task_flag.test_and_set();
+			stop_all_thread.request_stop();
 		}
 
 		bool is_stop_all_task()
 		{
-			return stop_all_task_flag.test(std::memory_order_relaxed);
+			return stop_all_thread.stop_requested();
 		}
 
 		void stop_get_result_task()
@@ -81,6 +81,11 @@ namespace
 				// Ждем завершения задачи
 				get_result_thread.join();
 			}
+		}
+
+		bool is_stop_get_result_task()
+		{
+			return stop_get_result_thread.stop_requested();
 		}
 
 		/*
@@ -140,11 +145,11 @@ namespace
 		Получаем копию параметра digits, т.к. вызывающая функция будет менять набор цифр
 		не дожидаясь пока асинхронная задача отработает. Для асинхронной задачи необходима автономность данных.
 		*/
-		auto make_combination_task(TDigits digits) -> TResult
+		auto make_combination_task(TDigits digits, std::stop_token stop_task) -> TResult
 		{
 			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
 			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
-			if (digits.empty() || GetCombinations::is_stop_all_task())
+			if (digits.empty() || stop_task.stop_requested())
 				return TResult{};
 
 			// Получаем из пула задач разрешение на запуск. Если пул полон, ждем своей очереди
@@ -157,7 +162,7 @@ namespace
 			// Добавляем комбинацию из одиночных цифр
 			result_buff.emplace_back(digits);
 			// Сразу же добавляем число из всего набора цифр
-			if ((digits.size() > 1) && (*digits.begin() != 0) && !GetCombinations::is_stop_all_task())
+			if ((digits.size() > 1) && (*digits.begin() != 0) && !stop_task.stop_requested())
 				result_buff.push_back({ assistools::inumber_from_digits(digits) });
 
 			/*
@@ -166,14 +171,14 @@ namespace
 			т.к. число из полного набора цифр уже сформировано.
 			Заканчиваем двухзначными, т.к. комбинация из одиночных цифр уже сформирована
 			*/
-			for (auto _size{ digits.size() - 1 }; (1 < _size) && !GetCombinations::is_stop_all_task(); --_size)
+			for (auto _size{ digits.size() - 1 }; (1 < _size) && !stop_task.stop_requested(); --_size)
 			{
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, _size) };
 				TDigits _buff;
 				_buff.reserve(_size);
-				while ((it_first_digit != it_last_digit) && !GetCombinations::is_stop_all_task())
+				while ((it_first_digit != it_last_digit) && !stop_task.stop_requested())
 				{
 					// Числа, начинающиеся с 0, пропускаем
 					if (*it_first_digit != 0)
@@ -207,9 +212,9 @@ namespace
 		}
 
 	public:
-		explicit GetCombinations(TPoolSize poolsize = 0) noexcept
+		explicit GetCombinations(TPoolSize pool_size = 0) noexcept
 		{
-			auto _pool_size = (poolsize > 0) ? std::move(poolsize) : std::thread::hardware_concurrency();
+			auto _pool_size = (pool_size > 0) ? std::move(pool_size) : std::thread::hardware_concurrency();
 			//Инициализируем пул задач в виде счетчика-семафора
 			task_pool = (_pool_size) ? std::make_unique<std::counting_semaphore<>>(_pool_size)
 									// На случай, если std::thread::hardware_concurrency() не сработает
@@ -221,7 +226,7 @@ namespace
 		~GetCombinations()
 		{
 			// Останавливаем фоновую задачу предварительной сборки результатов
-			stop_get_result_task();
+			GetCombinations::stop_get_result_task();
 
 			// Если остались незавершенные задачи, ожидаем...
 			if (!task_list.empty())
@@ -246,10 +251,10 @@ namespace
 			// Планируем на выполнение асинхронные задачи. При этом задачи могут быть "ленивыми".
 			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
 			// Новые задачи запускаются только если не поступил запрос об остановке или получении окончательного результата
-			if (!GetCombinations::is_stop_all_task() && !stop_get_result_thread.stop_requested())
+			if (!GetCombinations::is_stop_all_task() && !GetCombinations::is_stop_get_result_task())
 			{
-				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его без блокировки
-				auto task_future{ std::async(policy, &GetCombinations::make_combination_task, this, digits) };
+				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его вне блокировки
+				auto task_future{ std::async(policy, &GetCombinations::make_combination_task, this, digits, stop_all_thread.get_token()) };
 				std::lock_guard<std::mutex> lock_task_list(task_list_mutex);
 				task_list.emplace_back(std::move(task_future));
 			}
@@ -281,7 +286,7 @@ namespace
 			*/
 
 			// Останавливаем фоновую задачу предварительной сборки результатов
-			stop_get_result_task();
+			GetCombinations::stop_get_result_task();
 
 			std::unique_lock<std::mutex> lock_task_list(task_list_mutex);
 			// Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
