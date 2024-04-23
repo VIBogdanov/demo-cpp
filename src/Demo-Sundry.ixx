@@ -263,7 +263,7 @@ namespace
 		std::vector<TIndex> indexes;
 
 	public:
-		GetIndexes(const TIndex& list_len = TIndex(), const sundry::SortMethod method = sundry::SortMethod::SHELL);
+		GetIndexes(const TIndex& = TIndex(), const sundry::SortMethod = sundry::SortMethod::SHELL);
 		// Для обхода "вручную" объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему.
 		auto crbegin() const noexcept { return indexes.crbegin(); }
 		auto crend() const noexcept { return indexes.crend(); }
@@ -355,15 +355,11 @@ export namespace sundry
 		// Определяем делимое и делитель. Делимое - большее число. Делитель - меньшее.
 		auto [divisor, divisible] = std::ranges::minmax({ std::abs(number_a), std::abs(number_b) });
 
-		if (divisor) // Вычисляем только если делитель не равен нулю.
-			while (auto _div{ divisible % divisor }) {
-				divisible = std::move(divisor);
-				divisor = std::move(_div);
-			}
-		else
-			divisor = std::move(divisible);
+		// Вычисляем только если делитель не равен нулю.
+		while (divisor)
+			divisible = std::exchange(divisor, divisible % divisor);
 
-		return (divisor) ? std::optional<TNumber>{divisor} : std::nullopt;
+		return (divisible) ? std::optional<TNumber>{divisible} : std::nullopt;
 	};
 
 	/**
@@ -387,7 +383,7 @@ export namespace sundry
 		Если ни один диапазон не найден, возвращается пустой список.
 	*/
 	template <typename TContainer = std::vector<int>>
-		requires std::ranges::range<TContainer>&& std::is_integral_v<typename TContainer::value_type>
+		requires std::ranges::range<TContainer> && std::is_integral_v<typename TContainer::value_type>
 	auto find_intervals(const TContainer& numbers, const typename TContainer::value_type& target)
 		-> std::vector<std::pair<typename TContainer::size_type, typename TContainer::size_type>>
 	{
@@ -462,7 +458,7 @@ export namespace sundry
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
 		//Максимально обобщенный вариант для контейнеров
-		return _find_item_by_binary(elements.begin(), elements.end(), std::move(target)); //span не поддерживает cbegin/cend
+		return _find_item_by_binary(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
 	};
 
 	/**
@@ -487,9 +483,9 @@ export namespace sundry
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, std::move(target));
+			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
-			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), std::move(target));
+			return _find_item_by_binary(std::ranges::begin(elements), std::ranges::end(elements), target);
 	};
 
 	/**
@@ -519,7 +515,7 @@ export namespace sundry
 		-> std::make_signed_t<typename TContainer::size_type>
 	{
 		//Максимально обобщенный вариант для контейнеров
-		return _find_item_by_interpolation(elements.begin(), elements.end(), std::move(target)); //span не поддерживает cbegin/cend
+		return _find_item_by_interpolation(elements.begin(), elements.end(), target); //span не поддерживает cbegin/cend
 	};
 
 
@@ -549,9 +545,9 @@ export namespace sundry
 		// Перегруженная версия функции для обработки обычных числовых и строковых c-массивов.
 		if (std::is_same_v<T, char> && !*(std::end(elements) - 1))
 			// Если массив - это строковая константа, заканчивающаяся на 0, смещаем конечный индекс для пропуска нулевого символа
-			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, std::move(target));
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements) - 1, target);
 		else
-			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), std::move(target));
+			return _find_item_by_interpolation(std::ranges::begin(elements), std::ranges::end(elements), target);
 	};
 
 	/**

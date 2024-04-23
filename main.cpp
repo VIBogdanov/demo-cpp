@@ -37,7 +37,7 @@ int main()
 	{
 		cout << endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << endl;
 		cout << " get_common_divisor(20, 12) -> ";
-		if (auto res = sundry::get_common_divisor(20, 12))
+		if (auto res = sundry::get_common_divisor(20L, 12L))
 			cout << *res;
 		else
 			cout << "Невозможно вычислить общий делитель!";
@@ -126,6 +126,8 @@ int main()
 		}
 		cout << "}" << endl;
 	}
+
+	auto rr = assistools::get_day_week_name(14, -4, 2024);
 
 	return 0;
 }

@@ -7,7 +7,6 @@
 #include <semaphore>
 #include <thread>
 #include <execution>
-#include <chrono>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -36,7 +35,7 @@ namespace
 		using TPoolSize = std::ptrdiff_t; // Тип ptrdiff_t выбран по аналогии с конструктором std::counting_semaphore
 		const TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
 
-		// Итоговый список, в котором будем собирать результаты от запланированных задач
+		// Итоговый список, в котором будем собирать результаты от запланированных асинхронных задач
 		TResult result_list{};
 		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
 		// переупаковки и запуска "ленивых" задач. По сути это очередь задач.
@@ -47,6 +46,16 @@ namespace
 		std::unique_ptr<std::counting_semaphore<>> task_pool{ nullptr };
 		// Флаг досрочного завершения задач
 		std::atomic_flag stop_all_task_flag = ATOMIC_FLAG_INIT;
+		// Флаг получения окончательного результата
+		std::atomic_flag get_all_result_flag = ATOMIC_FLAG_INIT;
+		// Регулирует одновременный доступ к task_list из нескольких потоков
+		std::mutex task_list_mutex;
+		// Отдельный поток для фоновой сборки результатов завершенных асинхронных задач
+		std::jthread result_thread;
+		// Ожидание готовности результатов для фонового процесса сборки
+		std::condition_variable result_ready;
+		// Счетчик завершенных асинхронных задач с готовыми результатами
+		std::atomic<unsigned int> done_task_count{ 0 };
 
 		void stop_all_task()
 		{
@@ -58,13 +67,75 @@ namespace
 			return stop_all_task_flag.test(std::memory_order_relaxed);
 		}
 
+		void get_all_result()
+		{
+			get_all_result_flag.test_and_set();
+		}
+
+		bool is_get_all_result()
+		{
+			return get_all_result_flag.test(std::memory_order_relaxed);
+		}
+
+		/*
+		Фоновая задача, которая предварительно собирает результаты завершенных асинхронных задач
+		по мере их готовности до момента вызова get_combinations.
+		*/
+		void get_result_task()
+		{
+			// Если поступил запрос на остановку всех задач или на получение окончательного результата,
+			// завершаем фоновый процесс предварительной сборки результатов
+			while (!GetCombinations::is_stop_all_task() && !GetCombinations::is_get_all_result())
+			{
+				std::unique_lock<std::mutex> lock_task_list(task_list_mutex);
+				// Ожидаем уведомления о готовности результатов из асинхронных задач make_combination_task
+				// Счетчик done_task_count предохраняет от ложных пробуждений
+				result_ready.wait(lock_task_list, [&] { return done_task_count > 0; });
+				// После получения уведомления о готовности от какой-либо из задач,
+				// просматриваем список задач в поиске задач с готовыми результатами
+				for (auto it_future = task_list.begin(); it_future != task_list.end();)
+				{
+					// Сохраняем копию фьючерса в локальной переменной, чтобы обработать результат без блокировки списка задач
+					auto future_task = *it_future;
+					// На время работы с фьючерсом снимаем блокировку со списка задач, что позволит запуститься новым задачам
+					lock_task_list.unlock();
+					if (future_task.valid())
+					{
+						// Вызов wait_for нужен только для получения статуса готовности, потому нулевая задержка
+						switch (future_task.wait_for(std::chrono::milliseconds(0)))
+						{
+						case std::future_status::ready: //Задача отработала и результат готов
+							//Перемещаем полученный от задачи результат в итоговый список
+							std::ranges::move(future_task.get(), std::back_inserter(result_list));
+							done_task_count.fetch_sub(1); // Уменьшаем счетчик завершенных задач
+							lock_task_list.lock(); // Восстанавливаем блокировку
+							//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
+							it_future = task_list.erase(it_future);
+							break;
+						default:
+							// Если задача еще не отработала и результат не готов, пропускаем и переходим к следующей.
+							// При этом задача остается в списке и будет еще раз проверена на готовность в следующем цикле
+							lock_task_list.lock(); // Восстанавливаем блокировку
+							++it_future;
+							break;
+						}
+					}
+					else
+					{
+						//Если фьючерс не валиден, удаляем соответствующую ему задачу из списка без обработки
+						lock_task_list.lock(); // Восстанавливаем блокировку
+						it_future = task_list.erase(it_future);
+					}
+				}
+			}
+		};
 
 		/*
 		Функция, которая запускается как отдельная асинхронная задача.
 		Получаем копию параметра digits, т.к. вызывающая функция будет менять набор цифр
 		не дожидаясь пока асинхронная задача отработает. Для асинхронной задачи необходима автономность данных.
 		*/
-		auto make_combination(TDigits digits) -> TResult
+		auto make_combination_task(TDigits digits) -> TResult
 		{
 			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
 			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
@@ -122,6 +193,10 @@ namespace
 			}
 			// Освобождаем место в очереди пула задач
 			task_pool->release();
+			// Наращиваем счетчик завершенных задач
+			done_task_count.fetch_add(1);
+			// Отправляем уведомление сборщику результатов get_result_task о готовности результата текущей задачи
+			task_pool->release();
 			// Это еще не окончательный результат, а лишь промежуточный для конкретной асинхронной задачи
 			return result_buff;
 		}
@@ -131,18 +206,31 @@ namespace
 		{
 			auto _pool_size = (poolsize > 0) ? std::move(poolsize) : std::thread::hardware_concurrency();
 			//Инициализируем пул задач в виде счетчика-семафора
-			task_pool = (_pool_size) ? std::make_unique<std::counting_semaphore<>>(std::move(_pool_size))
+			task_pool = (_pool_size) ? std::make_unique<std::counting_semaphore<>>(_pool_size)
 									// На случай, если std::thread::hardware_concurrency() не сработает
 									: std::make_unique<std::counting_semaphore<>>(_DEFAULT_POOL_SIZE_);
+			// Запускаем фоновую задачу предварительной сборки результатов
+			result_thread = std::jthread(&GetCombinations::get_result_task, this);
 		}
 
 		~GetCombinations()
 		{
+			GetCombinations::stop_all_task();
+
+			// Если фоновая задача предварительной сборки результатов работает, останавливаем ее
+			if (result_thread.joinable())
+			{
+				// Для разблокировки ожидания значение done_task_count должно быть > 0
+				if (done_task_count == 0) done_task_count.fetch_add(1);
+				// Отправляем уведомление для разблокировки ожидания
+				result_ready.notify_one();
+				// Ждем завершения задачи
+				result_thread.join();
+			}
+
 			// Если остались незавершенные задачи, ожидаем...
 			if (!task_list.empty())
 			{
-				GetCombinations::stop_all_task();
-				
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
 					task_list.cend(),
@@ -160,13 +248,20 @@ namespace
 		{
 			// Планируем на выполнение асинхронные задачи. При этом задачи могут быть "ленивыми".
 			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
-			task_list.emplace_back(std::async(std::move(policy), &GetCombinations::make_combination, this, std::move(digits)));
+			// Новые задачи запускаются только если не поступил запрос об остановке или получении окончательного результата
+			if (!GetCombinations::is_stop_all_task() && !GetCombinations::is_get_all_result())
+			{
+				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его без блокировки
+				auto task_future{ std::async(policy, &GetCombinations::make_combination_task, this, digits) };
+				std::lock_guard<std::mutex> lock_task_list(task_list_mutex);
+				task_list.emplace_back(std::move(task_future));
+			}
 		}
 
 		void add_digits(TNumber number, std::launch policy = std::launch::async)
 		{
 			// Числа распарсиваются в цифры и из них формируется асинхронная задача
-			GetCombinations::add_digits(assistools::inumber_to_digits(std::move(number)), std::move(policy));
+			GetCombinations::add_digits(assistools::inumber_to_digits(number), policy);
 		}
 
 		void stop_combinations()
@@ -188,7 +283,18 @@ namespace
 			асинхронной задачи, что приводит к запуску "ленивой" задачи, но уже в качестве асинхронной
 			*/
 
-			//Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
+			GetCombinations::get_all_result();
+			// По аналогии см. ~GetCombinations()
+			if (result_thread.joinable())
+			{
+				if (done_task_count == 0) done_task_count.fetch_add(1);
+				result_ready.notify_one();
+				result_thread.join();
+			}
+
+			std::unique_lock<std::mutex> lock_task_list(task_list_mutex);
+			// Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
+			// Требуется для сборки результатов от оставшихся незавершенных задач и для запуска "ленивых" задач
 			while (!task_list.empty())
 			{
 				//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
@@ -225,6 +331,7 @@ namespace
 						it_future = task_list.erase(it_future);
 				}
 			}
+			lock_task_list.unlock();
 			// Сортируем для удобства восприятия (не обязательно).
 			std::ranges::sort(result_list);
 			return result_list;
@@ -483,40 +590,4 @@ export namespace puzzles
 		return combination_numbers.get_combinations();
 	};
 
-	template <typename TNumber>
-		requires std::is_integral_v<TNumber>&& std::is_arithmetic_v<TNumber>
-	constexpr TNumber get_day_week_index(TNumber day, TNumber month, TNumber year)
-	{
-		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };
-		month = (_abs(month) > 12) ? _abs(month) - 12 : _abs(month); // Месяц по древнеримскому календарю
-		year = _abs(year);
-		// По древнеримскому календарю год начинается с марта.
-		// Январь и февраль относятся к прошлому году
-		if ((month == 1) || (month == 2))
-		{
-			--year;
-			month += 10;
-		}
-		else
-			month -= 2;
-
-		TNumber century{ year / 100 }; // количество столетий
-		year -= century * 100; // год в столетии
-
-		//Original: (day + (13*month-1)/5 + year + year/4 + century/4 - 2*c + 777) % 7;
-		return (_abs(day) + (13 * month - 1) / 5 + (5 * year - 7 * century) / 4 + 777) % 7;
-	};
-
-	template <typename TNumber = unsigned int>
-	constexpr std::string get_day_week_name(TNumber&& day, TNumber&& month, TNumber&& year)
-	{
-		std::vector<std::string> dw{ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday","Saturday" };
-		return dw[get_day_week_index(std::forward<TNumber>(day), std::forward<TNumber>(month), std::forward<TNumber>(year))];
-	};
-
-	constexpr int get_current_year()
-	{
-		std::chrono::year_month_day ymd{ std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()) };
-		return int(ymd.year());
-	};
 } 
