@@ -1,12 +1,12 @@
 ﻿module;
 #include <algorithm>
-#include <iterator>
-#include <stdexcept>
-#include <unordered_map>
-#include <future>
-#include <semaphore>
-#include <thread>
 #include <execution>
+#include <future>
+#include <iterator>
+#include <semaphore>
+#include <stdexcept>
+#include <thread>
+#include <unordered_map>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -46,12 +46,12 @@ namespace
 		std::unique_ptr<std::counting_semaphore<>> task_pool{ nullptr };
 		// Флаг досрочного завершения задач
 		std::atomic_flag stop_all_task_flag = ATOMIC_FLAG_INIT;
-		// Флаг получения окончательного результата
-		std::atomic_flag get_all_result_flag = ATOMIC_FLAG_INIT;
 		// Регулирует одновременный доступ к task_list из нескольких потоков
 		std::mutex task_list_mutex;
 		// Отдельный поток для фоновой сборки результатов завершенных асинхронных задач
-		std::jthread result_thread;
+		std::jthread get_result_thread;
+		// Для отправки запроса на останов для фонового потока предварительной сборки результата
+		std::stop_source stop_get_result_thread;
 		// Ожидание готовности результатов для фонового процесса сборки
 		std::condition_variable result_ready;
 		// Счетчик завершенных асинхронных задач с готовыми результатами
@@ -67,25 +67,30 @@ namespace
 			return stop_all_task_flag.test(std::memory_order_relaxed);
 		}
 
-		void get_all_result()
+		void stop_get_result_task()
 		{
-			get_all_result_flag.test_and_set();
-		}
-
-		bool is_get_all_result()
-		{
-			return get_all_result_flag.test(std::memory_order_relaxed);
+			// Если фоновая задача предварительной сборки результатов работает, останавливаем ее
+			if (get_result_thread.joinable())
+			{
+				// Оправляем в поток запрос на останов
+				stop_get_result_thread.request_stop();
+				// Для разблокировки ожидания значение done_task_count должно быть > 0
+				if (done_task_count == 0) done_task_count.fetch_add(1);
+				// Отправляем уведомление для разблокировки ожидания
+				result_ready.notify_one();
+				// Ждем завершения задачи
+				get_result_thread.join();
+			}
 		}
 
 		/*
 		Фоновая задача, которая предварительно собирает результаты завершенных асинхронных задач
 		по мере их готовности до момента вызова get_combinations.
 		*/
-		void get_result_task()
+		void get_result_task(std::stop_token stop_task)
 		{
-			// Если поступил запрос на остановку всех задач или на получение окончательного результата,
-			// завершаем фоновый процесс предварительной сборки результатов
-			while (!GetCombinations::is_stop_all_task() && !GetCombinations::is_get_all_result())
+			// Если поступил запрос на остановку, завершаем фоновый процесс предварительной сборки результатов
+			while (!GetCombinations::is_stop_all_task() && !stop_task.stop_requested())
 			{
 				std::unique_lock<std::mutex> lock_task_list(task_list_mutex);
 				// Ожидаем уведомления о готовности результатов из асинхронных задач make_combination_task
@@ -196,7 +201,7 @@ namespace
 			// Наращиваем счетчик завершенных задач
 			done_task_count.fetch_add(1);
 			// Отправляем уведомление сборщику результатов get_result_task о готовности результата текущей задачи
-			task_pool->release();
+			result_ready.notify_one();
 			// Это еще не окончательный результат, а лишь промежуточный для конкретной асинхронной задачи
 			return result_buff;
 		}
@@ -210,27 +215,19 @@ namespace
 									// На случай, если std::thread::hardware_concurrency() не сработает
 									: std::make_unique<std::counting_semaphore<>>(_DEFAULT_POOL_SIZE_);
 			// Запускаем фоновую задачу предварительной сборки результатов
-			result_thread = std::jthread(&GetCombinations::get_result_task, this);
+			get_result_thread = std::jthread(&GetCombinations::get_result_task, this, stop_get_result_thread.get_token());
 		}
 
 		~GetCombinations()
 		{
-			GetCombinations::stop_all_task();
-
-			// Если фоновая задача предварительной сборки результатов работает, останавливаем ее
-			if (result_thread.joinable())
-			{
-				// Для разблокировки ожидания значение done_task_count должно быть > 0
-				if (done_task_count == 0) done_task_count.fetch_add(1);
-				// Отправляем уведомление для разблокировки ожидания
-				result_ready.notify_one();
-				// Ждем завершения задачи
-				result_thread.join();
-			}
+			// Останавливаем фоновую задачу предварительной сборки результатов
+			stop_get_result_task();
 
 			// Если остались незавершенные задачи, ожидаем...
 			if (!task_list.empty())
 			{
+				GetCombinations::stop_all_task();
+
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
 					task_list.cend(),
@@ -249,7 +246,7 @@ namespace
 			// Планируем на выполнение асинхронные задачи. При этом задачи могут быть "ленивыми".
 			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
 			// Новые задачи запускаются только если не поступил запрос об остановке или получении окончательного результата
-			if (!GetCombinations::is_stop_all_task() && !GetCombinations::is_get_all_result())
+			if (!GetCombinations::is_stop_all_task() && !stop_get_result_thread.stop_requested())
 			{
 				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его без блокировки
 				auto task_future{ std::async(policy, &GetCombinations::make_combination_task, this, digits) };
@@ -283,14 +280,8 @@ namespace
 			асинхронной задачи, что приводит к запуску "ленивой" задачи, но уже в качестве асинхронной
 			*/
 
-			GetCombinations::get_all_result();
-			// По аналогии см. ~GetCombinations()
-			if (result_thread.joinable())
-			{
-				if (done_task_count == 0) done_task_count.fetch_add(1);
-				result_ready.notify_one();
-				result_thread.join();
-			}
+			// Останавливаем фоновую задачу предварительной сборки результатов
+			stop_get_result_task();
 
 			std::unique_lock<std::mutex> lock_task_list(task_list_mutex);
 			// Запускаем цикл асинхронного получения результатов пока в очереди есть запланированные задачи
