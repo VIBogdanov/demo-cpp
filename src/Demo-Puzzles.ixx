@@ -38,12 +38,10 @@ namespace
 
 		TResult result_list{}; // Итоговый список, в котором будем собирать результаты от запланированных асинхронных задач
 		std::mutex result_list_mutex;
-		TResult result_list_buff{}; // Список для частичной сборки результата дабы уменьшить число блокировок result_list
 		// Список задач в виде фьючерсов. Фьючерсы должны быть shared_future, ибо копии понадобятся для
 		// переупаковки и запуска "ленивых" задач. По сути это очередь задач.
 		// Тип контейнера выбран list, т.к. планируются частые вставки и удаления по всему списку.
 		std::list<TFuture> task_list{};
-		// Регулирует одновременный доступ к task_list из нескольких потоков
 		std::mutex task_list_mutex;
 		// Пул задач для ограничения максимального количества одновременно запущенных задач.
 		// По умолчанию устанавливается равным числу ядер процессора
@@ -101,6 +99,7 @@ namespace
 		*/
 		void get_result_task(std::stop_token stop_task)
 		{
+			TResult result_list_buff{ }; // Список для частичной сборки результата дабы уменьшить число блокировок result_list
 			// Если поступил запрос на остановку, завершаем фоновый процесс предварительной сборки результатов
 			while (!stop_task.stop_requested())
 			{
@@ -121,21 +120,22 @@ namespace
 						//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
 						for (auto it_future = task_list.begin(); (it_future != task_list.end()) && !stop_task.stop_requested();)
 						{
-							if ((*it_future).valid())
+							auto future_task = *it_future;
+							if (future_task.valid())
 							{
 								// Метод wait_for нужен только для получения статусов, потому вызываем с нулевой задержкой.
 								//Для каждой задачи отрабатываем два статуса: ready и deferred
-								switch ((*it_future).wait_for(std::chrono::milliseconds(0)))
+								switch (future_task.wait_for(std::chrono::milliseconds(0)))
 								{
 								case std::future_status::ready: //Задача отработала и результат готов
 									//Перемещаем полученный от задачи результат в буферный список
-									std::ranges::move((*it_future).get(), std::back_inserter(result_list_buff));
+									std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
 									//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
 									it_future = task_list.erase(it_future);
 									break;
 								case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
 									//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
-									task_list.emplace_back(std::async(std::launch::async, [lazy_future = (*it_future)] { return lazy_future.get(); }));
+									task_list.emplace_back(std::async(std::launch::async, [lazy_future = std::move(future_task)] { return lazy_future.get(); }));
 									//Удаляем "ленивую" задачу из списка задач
 									it_future = task_list.erase(it_future);
 									break;
@@ -152,11 +152,20 @@ namespace
 								it_future = task_list.erase(it_future);
 						}
 					}
-					// Копируем в итоговый список под блокировкой
+					lock_task_list.unlock();
+					// Догружаем в итоговый result_list все, что осталось после частичных выгрузок
+					if (!result_list_buff.empty() && !stop_task.stop_requested())
 					{
+						// Загружаем в итоговый список под блокировкой
 						std::lock_guard<std::mutex> lock_result_list(result_list_mutex);
-						std::ranges::copy(result_list_buff, std::back_inserter(result_list));
+						if (auto _res_size{ result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
+						{
+							auto it_last_loaded_result = std::ranges::next(result_list_buff.begin(), _res_size);
+							result_list.reserve(_buff_size);
+							result_list.insert(result_list.end(), it_last_loaded_result, result_list_buff.end());
+						}
 					}
+
 					get_full_result_flag.clear(); //Сбрасываем флаг требования получения полного результата
 					get_full_result_flag.notify_one(); //Уведомляем ожидающий поток о готовности полного результата
 				}
@@ -196,6 +205,20 @@ namespace
 							lock_task_list.lock(); // Восстанавливаем блокировку
 							it_future = task_list.erase(it_future);
 						}
+					}
+					lock_task_list.unlock();
+					// Выгружаем в итоговый result_list промежуточный (частичный) результат.
+					if (!result_list_buff.empty() && !stop_task.stop_requested())
+					{
+						// Пытаемся получить блокировку на result_list. Если не получилось, попробуем в следующий раз
+						std::unique_lock<std::mutex> lock_result_list(result_list_mutex, std::try_to_lock);
+						if (lock_result_list.owns_lock())
+							if (auto _res_size{ result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
+							{
+								auto it_last_loaded_result = std::ranges::next(result_list_buff.begin(), _res_size);
+								result_list.reserve(_buff_size);
+								result_list.insert(result_list.end(), it_last_loaded_result, result_list_buff.end());
+							}
 					}
 				}
 				
@@ -337,8 +360,9 @@ namespace
 			// Ждем готовности полного результата
 			get_full_result_flag.wait(true);
 
-			std::lock_guard<std::mutex> lock_result_list(result_list_mutex);
 			// Сортируем для удобства восприятия (не обязательно).
+			// Делаем это под блокировкой, т.к. поток get_result_task также имеет доступ к result_list
+			std::lock_guard<std::mutex> lock_result_list(result_list_mutex);
 			std::ranges::sort(result_list);
 			return result_list;
 		}
@@ -571,19 +595,18 @@ export namespace puzzles
 		using TNumber = typename std::remove_cvref_t<TContainer>::value_type;
 		using TDigits = std::vector<TNumber>;
 
+
+		auto _size{ std::ranges::distance(digits) };
+		if (_size == 0) return std::vector<TDigits>{};
+
+		TDigits _digits;
+		_digits.reserve(_size);
+
 		// Сохраняем копию исходного списка для формирования комбинаций перестановок
 		//TDigits _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
 		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
-		TDigits _digits{ std::ranges::begin(digits),
-						 std::ranges::end(digits) };
+		_digits.assign(std::ranges::begin(digits), std::ranges::end(digits));
 
-		switch (_digits.size())
-		{
-		case 1:
-			return std::vector<TDigits>{_digits};
-		case 0:
-			return std::vector<TDigits>{};
-		}
 		// Класс для запуска асинхронных задач
 		GetCombinations<TNumber> combination_numbers;
 		// Формируем следующую комбинацию из одиночных цифр
@@ -592,7 +615,7 @@ export namespace puzzles
 		do combination_numbers.add_digits(_digits);
 		while (std::next_permutation(_digits.begin(), _digits.end()));
 		// Запрашиваем у класса GetCombinations дождаться завершения асинхронных задач,
-		// получить результаты их работы и собрать итоговый результирующий список перестановок
+		// собрать результаты их работы и получить итоговый результирующий список перестановок
 		return combination_numbers.get_combinations();
 	};
 
