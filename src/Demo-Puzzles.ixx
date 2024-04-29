@@ -167,22 +167,27 @@ namespace
 						}
 					}
 					lock_task_list.unlock();
-					// Догружаем в итоговый result_list все, что осталось после частичных выгрузок
+					
 					if (!result_list_buff.empty() && !stop_task.stop_requested())
 					{
 						// Загружаем в итоговый список под блокировкой
 						std::lock_guard<std::mutex> lock_result_list(this->result_list_mutex);
-						if (auto _res_size{ this->result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
+						if (this->accumulate_result_flag)
 						{
-							auto it_last_loaded_result{ std::ranges::next(result_list_buff.begin(), _res_size) };
-							this->result_list.reserve(_buff_size);
-							this->result_list.insert(this->result_list.end(), it_last_loaded_result, result_list_buff.end());
+							// Догружаем в итоговый result_list все, что осталось после частичных выгрузок
+							if (auto _res_size{ this->result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
+							{
+								this->result_list.reserve(_buff_size);
+								auto it_last_loaded_result{ std::ranges::next(result_list_buff.begin(), _res_size) };
+								this->result_list.insert(this->result_list.end(), it_last_loaded_result, result_list_buff.end());
+							}
 						}
+						else //Если аккумулировать результат не нужно, выгружаем и очищаем буфер
+							this->result_list = std::move(result_list_buff);
 					}
 					
 					this->request_full_result_flag.clear(); //Сбрасываем флаг требования получения полного результата
 					this->request_full_result_flag.notify_one(); //Уведомляем ожидающий поток о готовности полного результата
-					if (!this->accumulate_result_flag) result_list_buff.clear(); //Если аккумулировать результат не нужно, очищаем буфер
 				}
 				else if (this->done_task_count.load() > 0)
 				{
