@@ -55,7 +55,7 @@ export namespace assistools
 	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
 		-> TResult
 	{
-		// TResult используется для указания типа возвращаемого значения отличного от содержимого итератора
+		// TResult используется для указания типа возвращаемого значения отличного от int
 		using TDigit = std::iter_value_t<TIterator>;
 		auto get_number = [](TResult num, const TDigit& dig) -> TResult
 			{ return num * 10 + ((dig < 0) ? -dig : dig) % 10; };
@@ -260,7 +260,7 @@ export namespace assistools
 		TNumber century{ year / 100 }; // количество столетий
 		year -= century * 100; // год в столетии
 
-		//Original: (day + (13*month-1)/5 + year + year/4 + century/4 - 2*c + 777) % 7;
+		//Original: (day + (13*month-1)/5 + year + year/4 + century/4 - 2*century + 777) % 7;
 		return (_abs(day) + (13 * month - 1) / 5 + (5 * year - 7 * century) / 4 + 777) % 7;
 	};
 

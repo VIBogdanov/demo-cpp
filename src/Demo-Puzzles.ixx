@@ -78,7 +78,7 @@ namespace
 				std::for_each(std::execution::par,
 					this->task_list.cbegin(),
 					this->task_list.cend(),
-					[](auto t) { if (t.valid()) t.wait(); });
+					[](auto& t) { if (t.valid()) t.wait(); });
 
 				this->task_list.clear();
 				this->done_task_count.store(0);
@@ -116,10 +116,11 @@ namespace
 			// Если поступил запрос на остановку, завершаем фоновый процесс предварительной сборки результатов
 			while (!stop_task.stop_requested())
 			{
-				// Ожидаем уведомления о готовности результатов из асинхронных задач make_combination_task
+				// Ожидаем, если нет уведомления о готовности результатов из асинхронных задач make_combination_task,
+				// нет уведомления об остановке потока и нет запроса на на формирование полного результата
 				if ((this->done_task_count.load() == 0)
-					|| !stop_task.stop_requested()
-					|| !this->request_full_result_flag.test()) this->result_ready_flag.wait(false);
+					&& !stop_task.stop_requested()
+					&& !this->request_full_result_flag.test()) this->result_ready_flag.wait(false);
 				// Выясняем причину пробуждения
 				if (stop_task.stop_requested())
 					// Если причина пробуждения запрос на останов задачи, выходим из цикла
@@ -131,10 +132,10 @@ namespace
 					while (!this->task_list.empty() && !stop_task.stop_requested())
 					{
 						//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
-						for (auto it_future = this->task_list.begin(); (it_future != this->task_list.end())
+						for (auto it_future{ this->task_list.begin() }; (it_future != this->task_list.end())
 							&& !stop_task.stop_requested();) // Если поступил запрос на останов, досрочно выходим
 						{
-							if (auto future_task{ *it_future }; future_task.valid())
+							if (auto future_task{ *it_future }; future_task.valid()) [[likely]]
 							{
 								// Метод wait_for нужен только для получения статусов, потому вызываем с нулевой задержкой.
 								//Для каждой задачи отрабатываем два статуса: ready и deferred
@@ -198,7 +199,7 @@ namespace
 						&& !stop_task.stop_requested() // Если поступил запрос на останов, досрочно выходим
 						&& this->done_task_count.load() > 0;) // Если счетчик завершенных задач обнулился, досрочно выходим
 					{
-						if (auto future_task{ *it_future }; future_task.valid())
+						if (auto future_task{ *it_future }; future_task.valid()) [[likely]]
 						{
 							if (future_task.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
 							{

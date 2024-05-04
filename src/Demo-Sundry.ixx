@@ -613,8 +613,8 @@ export namespace sundry
 		// Флаг, исключающий "пустые" циклы, когда список достигает состояния "отсортирован" на одной из итераций
 		bool is_swapped{ false };
 		// Сравниваем в зависимости от направления сортировки
-		auto _compare = [revers](const auto curr, const auto next) -> bool
-			{ return (revers) ? *curr < *next : *next < *curr; };
+		auto _compare = [revers](const auto it_curr, const auto it_next) -> bool
+			{ return (revers) ? *it_curr < *it_next : *it_next < *it_curr; };
 
 		while (it_start != it_end)
 		{
