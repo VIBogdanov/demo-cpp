@@ -13,7 +13,7 @@ int main()
 
 	std::cout << std::endl << " - Функция преобразования целого числа в набор цифр." << std::endl;
 	std::cout << " inumber_to_digits(12340) -> ";
-	std::ranges::for_each(assistools::inumber_to_digits(12340L), [](const auto& n) { std::cout << n << ' '; });
+	std::ranges::for_each(assistools::inumber_to_digits(12340L), [](const auto& n) { std::cout << n << " "; });
 	std::cout << std::endl;
 
 	std::cout << std::endl << " - Функция получения целого числа из набора цифр." << std::endl;

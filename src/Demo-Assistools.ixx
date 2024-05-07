@@ -11,34 +11,6 @@ export module Demo:Assistools;
 export namespace assistools
 {
 	/**
-	@brief Функция преобразования целого числа в набор цифр.
-
-	@example inumber_to_digits(124) -> vector<int>(1, 2, 4)
-
-	@param number - Заданное целое число. По умолчанию 0.
-
-	@return Массив цифр.
-	*/
-	template <typename TNumber>
-	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
-		-> std::vector<TNumber>
-	{
-		if (number < 0) number = -number; // Знак числа отбрасываем
-		std::vector<TNumber> result;
-		
-		do
-			result.emplace_back(number % 10);
-		while (number /= 10);
-
-		result.shrink_to_fit();
-		// Можно было отказаться от reverse и в цикле использовать вставку в начало вектора,
-		// но это каждый раз приводит к сдвигу всех элементов вектора, что медленно
-		std::ranges::reverse(result);
-		return result;
-	};
-
-	/**
 	@brief Функция получения целого числа из набора цифр.
 
 	@example inumber_from_digits({1,2,4}) -> 124
@@ -70,9 +42,37 @@ export namespace assistools
 	{
  		return inumber_from_digits<TResult>(std::ranges::begin(digits), std::ranges::end(digits));
 	};
+	
+	/**
+	@brief Функция преобразования целого числа в набор цифр.
+
+	@example inumber_to_digits(124) -> vector<int>(1, 2, 4)
+
+	@param number - Заданное целое число. По умолчанию 0.
+
+	@return Массив цифр.
+	*/
+	template <typename TNumber>
+	requires std::is_integral_v<TNumber>&&
+			std::is_arithmetic_v<TNumber>
+	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
+		-> std::vector<TNumber>
+	{
+		if (number < 0) number = -number; // Знак числа отбрасываем
+		std::vector<TNumber> result;
+
+		do
+			result.emplace_back(number % 10);
+		while (number /= 10);
+
+		result.shrink_to_fit();
+		// Можно было отказаться от reverse и в цикле использовать вставку в начало вектора,
+		// но это каждый раз приводит к сдвигу всех элементов вектора, что медленно
+		std::ranges::reverse(result);
+		return result;
+	};
 
 	/**
-	 """
 	@brief Функция, формирующая список индексов диапазонов заданной длины,
 	на которые можно разбить исходный список. Индексирование начинается с нуля.
 	Последний индекс диапазона не включается. Действует правило [ ).
@@ -91,7 +91,6 @@ export namespace assistools
 	@param range_size (int): Размер диапазона.
 
 	@return vector<std::pair<int, int>>: Список пар с начальным и конечным индексами диапазона.
-	"""
 	*/
 	template <typename TNumber>
 	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
@@ -130,7 +129,6 @@ export namespace assistools
 		result.shrink_to_fit();
 		return result;
 	};
-
 
 	/**
 	@brief Функция возведения в степень целого числа.
@@ -245,7 +243,10 @@ export namespace assistools
 	constexpr TNumber get_day_week_index(TNumber day, TNumber month, TNumber year)
 	{
 		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };
-		month = (_abs(month) > 12) ? _abs(month) - 12 : _abs(month); // Месяц по древнеримскому календарю
+
+		if (auto m = _abs(month) % 12) month = m;
+		else month = 12;
+
 		year = _abs(year);
 		// По древнеримскому календарю год начинается с марта.
 		// Январь и февраль относятся к прошлому году
