@@ -11,39 +11,6 @@ export module Demo:Assistools;
 export namespace assistools
 {
 	/**
-	@brief Функция получения целого числа из набора цифр.
-
-	@example inumber_from_digits({1,2,4}) -> 124
-
-	@param digits - Список цифр или начальный и конечный итераторы списка.
-
-	@return Целое число.
-	*/
-	template <typename TResult = int,
-		std::input_iterator TIterator,
-		std::sentinel_for<TIterator> TSIterator>
-	requires std::is_integral_v<std::iter_value_t<TIterator>>&&
-			std::is_arithmetic_v<std::iter_value_t<TIterator>>
-	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
-		-> TResult
-	{
-		// TResult используется для указания типа возвращаемого значения отличного от int
-		using TDigit = std::iter_value_t<TIterator>;
-		auto get_number = [](TResult num, const TDigit& dig) -> TResult
-			{ return num * 10 + ((dig < 0) ? -dig : dig) % 10; };
-		return std::accumulate(first, last, TResult(0), get_number);
-	};
-
-	template <typename TResult = int, typename TContainer = std::vector<int>>
-	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
-			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>
-	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
-		-> TResult
-	{
- 		return inumber_from_digits<TResult>(std::ranges::begin(digits), std::ranges::end(digits));
-	};
-	
-	/**
 	@brief Функция преобразования целого числа в набор цифр.
 
 	@example inumber_to_digits(124) -> vector<int>(1, 2, 4)
@@ -53,9 +20,9 @@ export namespace assistools
 	@return Массив цифр.
 	*/
 	template <typename TNumber>
-	requires std::is_integral_v<TNumber>&&
-			std::is_arithmetic_v<TNumber>
-	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
+		requires std::is_integral_v<TNumber>&&
+	std::is_arithmetic_v<TNumber>
+		constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
 		-> std::vector<TNumber>
 	{
 		if (number < 0) number = -number; // Знак числа отбрасываем
@@ -70,6 +37,52 @@ export namespace assistools
 		// но это каждый раз приводит к сдвигу всех элементов вектора, что медленно
 		std::ranges::reverse(result);
 		return result;
+	};
+
+	/**
+	@brief Функция получения целого числа из набора цифр или чисел.
+
+	@example inumber_from_digits({1,2,34}) -> 1234
+
+	@param digits - Список цифр/чисел или начальный и конечный итераторы списка.
+
+	@return Целое число.
+	*/
+	template <typename TResult = int,
+		std::input_iterator TIterator,
+		std::sentinel_for<TIterator> TSIterator>
+	requires std::is_integral_v<std::iter_value_t<TIterator>>&&
+			std::is_arithmetic_v<std::iter_value_t<TIterator>>&&
+			std::is_convertible_v<std::iter_value_t<TIterator>, TResult>
+	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
+		-> TResult
+	{
+		// TResult используется для указания типа возвращаемого значения отличного от int
+		using TDigit = std::iter_value_t<TIterator>;
+		// Формируем очищенный список цифр. Избавляемся от минусов и раскладываем числа на цифры.
+		std::vector<TDigit> digits;
+		auto get_digits = [&digits](const auto& n)
+			{
+				if (auto _dig = (n < 0) ? -n : n; _dig < 10)
+					digits.emplace_back(_dig);
+				else
+					std::ranges::move(assistools::inumber_to_digits(_dig), std::back_inserter(digits));
+			};
+		std::for_each(first, last, get_digits);
+
+		auto get_number = [](TResult num, const auto& dig) -> TResult
+			{ return num * 10 + static_cast<TResult>(dig); };
+		return std::accumulate(digits.begin(), digits.end(), TResult(0), get_number);
+	};
+
+	template <typename TResult = int, typename TContainer = std::vector<int>>
+	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
+			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>&&
+				std::is_convertible_v<typename std::remove_cvref_t<TContainer>::value_type, TResult>
+	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
+		-> TResult
+	{
+ 		return inumber_from_digits<TResult>(std::ranges::begin(digits), std::ranges::end(digits));
 	};
 
 	/**
@@ -262,7 +275,7 @@ export namespace assistools
 		year -= century * 100; // год в столетии
 
 		//Original: (day + (13*month-1)/5 + year + year/4 + century/4 - 2*century + 777) % 7;
-		return (_abs(day) + (13 * month - 1) / 5 + (5 * year - 7 * century) / 4 + 777) % 7;
+		return static_cast<TNumber>((_abs(day) + (13 * month - 1) / 5 + (5 * year - 7 * century) / 4 + 777) % 7);
 	};
 
 	template <typename TNumber = unsigned int>

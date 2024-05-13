@@ -17,8 +17,8 @@ int main()
 	std::cout << std::endl;
 
 	std::cout << std::endl << " - Функция получения целого числа из набора цифр." << std::endl;
-	std::cout << " inumber_from_digits({ 2, 7, 0 }) -> ";
-	std::cout << assistools::inumber_from_digits({ 2, 7, 0 }) << std::endl;
+	std::cout << " inumber_from_digits({ 2, 17, 0 }) -> ";
+	std::cout << assistools::inumber_from_digits({ 2, 17, 0 }) << std::endl;
 	
 	std::cout << std::endl << " - Формирует список индексов диапазонов, на которые можно разбить список заданной длины." << std::endl;
 	std::cout << " get_ranges_index(50, 10) -> ";
@@ -110,6 +110,6 @@ int main()
 		std::cout << "} ";
 	}
 	std::cout << "}" << std::endl;
-
+	
 	return 0;
 }
