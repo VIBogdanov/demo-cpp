@@ -98,8 +98,8 @@ int main()
 	}
 	
 	std::cout << std::endl << " - Олимпиадная задача. См. описание в Demo-Puzzles.ixx." << std::endl;
-	std::cout << " get_pagebook_number(27, 2, {8,0}) -> ";
-	std::cout << puzzles::get_pagebook_number(27, 2, { 8, 0 }) << std::endl;
+	std::cout << " get_pagebook_number(27, 2, {8,0,8}) -> ";
+	std::cout << puzzles::get_pagebook_number(27, 2, { 8, 0, 8 }) << std::endl;
 	
 	std::cout << std::endl << " - Сформировать все возможные уникальные наборы чисел из указанных цифр." << std::endl;
 	std::cout << " get_combination_numbers_async({ 0, 2, 7 }) -> ";

@@ -60,7 +60,7 @@ export namespace assistools
 		// TResult используется для указания типа возвращаемого значения отличного от int
 		auto get_number = [](TResult num, const auto& dig)->TResult
 			{
-				if (auto _dig = (dig < 0) ? -dig : dig; _dig < 10)
+				if (auto _dig{ (dig < 0) ? -dig : dig }; _dig < 10)
 					num = num * 10 + static_cast<TResult>(_dig);
 				else
 					std::ranges::for_each(assistools::inumber_to_digits(_dig),
@@ -252,7 +252,7 @@ export namespace assistools
 	{
 		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };
 
-		if (auto m = _abs(month) % 12) month = m;
+		if (auto m{ _abs(month) % 12 }) month = m;
 		else month = 12;
 
 		year = _abs(year);

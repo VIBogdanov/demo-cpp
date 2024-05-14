@@ -457,7 +457,7 @@ export namespace puzzles
 	template <typename TContainer = std::vector<int>>
 	auto get_pagebook_number(const typename TContainer::value_type& pages,
 							const typename TContainer::value_type& count,
-							const TContainer& digits)
+							TContainer digits) // Умышленно получаем копию списка
 		-> typename TContainer::value_type
 	{
 		// Отрабатываем некорректные параметры
@@ -466,8 +466,6 @@ export namespace puzzles
 		using TIndex = std::make_signed_t<typename TContainer::size_type>;
 		using TValue = typename TContainer::value_type;
 
-		std::vector<TValue> _digits{};
-		_digits.reserve(digits.size());
 		auto get_near_number = [pages](const auto& last_digit) -> TValue
 			{
 				// На всякий случай отбрасываем минус и от многозначных чисел оставляем последнюю цифру
@@ -475,21 +473,21 @@ export namespace puzzles
 				return (pages - _last_digit) / 10 * 10 + _last_digit;
 			};
 		// Формируем список с ближайшими меньшими числами, оканчивающиеся на цифры из списка digits
-		std::ranges::transform(digits, std::back_inserter(_digits), get_near_number);
+		std::ranges::transform(digits, digits.begin(), get_near_number);
 		// Полученный список обязательно должен быть отсортирован в обратном порядке
-		std::ranges::sort(_digits, [](const auto& a, const auto& b) { return b < a; });
+		std::ranges::sort(digits, [](const auto& a, const auto& b) { return b < a; });
 		// Заодно удаляем дубликаты
-		_digits.erase(std::unique(_digits.begin(), _digits.end()), _digits.end());
+		digits.erase(std::ranges::unique(digits).begin(), digits.end());
 		// Для чистоты вычислений приводим тип
-		TValue _size = static_cast<TValue>(_digits.size());
+		TValue _size = static_cast<TValue>(digits.size());
 		//Вычисляем позицию числа в списке digits, которое соответствует смещению count
 		TIndex idx{ (count % _size) - 1 };
 		// Т.к.последующая последняя цифра повторяется через 10,
 		// вычисляем множитель с учетом уже вычисленных значений
 		TValue multiplier{ (count - 1) / _size };
 
-		return ((idx < 0) ? *std::ranges::next(_digits.end(), idx)
-			: *std::ranges::next(_digits.begin(), idx)) - (multiplier * 10);
+		return ((idx < 0) ? *std::ranges::next(digits.end(), idx)
+			: *std::ranges::next(digits.begin(), idx)) - (multiplier * 10);
 	};
 
 
