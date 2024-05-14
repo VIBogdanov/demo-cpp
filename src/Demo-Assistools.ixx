@@ -53,32 +53,27 @@ export namespace assistools
 		std::sentinel_for<TIterator> TSIterator>
 	requires std::is_integral_v<std::iter_value_t<TIterator>>&&
 			std::is_arithmetic_v<std::iter_value_t<TIterator>>&&
-			std::is_convertible_v<std::iter_value_t<TIterator>, TResult>
+			std::convertible_to<std::iter_value_t<TIterator>, TResult>
 	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
 		-> TResult
 	{
 		// TResult используется для указания типа возвращаемого значения отличного от int
-		using TDigit = std::iter_value_t<TIterator>;
-		// Формируем очищенный список цифр. Избавляемся от минусов и раскладываем числа на цифры.
-		std::vector<TDigit> digits;
-		auto get_digits = [&digits](const auto& n)
+		auto get_number = [](TResult num, const auto& dig)->TResult
 			{
-				if (auto _dig = (n < 0) ? -n : n; _dig < 10)
-					digits.emplace_back(_dig);
+				if (auto _dig = (dig < 0) ? -dig : dig; _dig < 10)
+					num = num * 10 + static_cast<TResult>(_dig);
 				else
-					std::ranges::move(assistools::inumber_to_digits(_dig), std::back_inserter(digits));
+					std::ranges::for_each(assistools::inumber_to_digits(_dig),
+						[&num](const auto& __dig) { num = num * 10 + static_cast<TResult>(__dig); });
+				return num;
 			};
-		std::for_each(first, last, get_digits);
-
-		auto get_number = [](TResult num, const auto& dig) -> TResult
-			{ return num * 10 + static_cast<TResult>(dig); };
-		return std::accumulate(digits.begin(), digits.end(), TResult(0), get_number);
+		return std::accumulate(first, last, TResult(0), get_number);
 	};
 
 	template <typename TResult = int, typename TContainer = std::vector<int>>
 	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
 			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>&&
-				std::is_convertible_v<typename std::remove_cvref_t<TContainer>::value_type, TResult>
+			std::convertible_to<typename std::remove_cvref_t<TContainer>::value_type, TResult>
 	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
 		-> TResult
 	{
@@ -252,7 +247,7 @@ export namespace assistools
 	};
 
 	template <typename TNumber>
-		requires std::is_integral_v<TNumber>&& std::is_arithmetic_v<TNumber>
+		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
 	constexpr TNumber get_day_week_index(TNumber day, TNumber month, TNumber year)
 	{
 		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };

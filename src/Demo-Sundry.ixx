@@ -690,7 +690,7 @@ export namespace sundry
 			// Далее делим пополам обе половины до тех пор, пока в каждой половине не останется по одному элементу
 			while (!query_buff.empty())
 			{
-				auto [i_first, i_middle, i_last] = query_buff.front();
+				auto [i_first, i_middle, i_last] = std::move(query_buff.front());
 				query_buff.pop();
 				// Делим пополам левую часть
 				if (auto i_offset{ (i_middle - i_first) >> 1 })
@@ -710,7 +710,7 @@ export namespace sundry
 		while (!query_work.empty())
 		{
 			// Выбираем из очереди диапазоны, начиная с меньших
-			auto [i_first, i_middle, i_last] = query_work.top();
+			auto [i_first, i_middle, i_last] = std::move(query_work.top());
 			query_work.pop();
 
 			// Итерируем по половинчатым спискам и по исходному списку, сортируя его

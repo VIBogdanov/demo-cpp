@@ -292,7 +292,7 @@ namespace
 			return result_buff;
 		}
 
-		void init_getcombinations(TPoolSize pool_size, bool accumulate_result)
+		void init_pool_size(TPoolSize pool_size)
 		{
 			auto _pool_size = (pool_size > 0) ? std::move(pool_size) : std::thread::hardware_concurrency();
 			//Инициализируем пул задач в виде счетчика-семафора
@@ -306,12 +306,12 @@ namespace
 	public:
 		explicit GetCombinations(TPoolSize pool_size = 0, bool accumulate_result = true) : accumulate_result_flag(accumulate_result)
 		{
-			this->init_getcombinations(std::move(pool_size), std::move(accumulate_result));
+			this->init_pool_size(std::move(pool_size));
 		}
 
 		explicit GetCombinations(bool accumulate_result) : accumulate_result_flag(accumulate_result)
 		{
-			this->init_getcombinations(0, std::move(accumulate_result));
+			this->init_pool_size(0);
 		}
 
 		~GetCombinations()
@@ -585,7 +585,7 @@ export namespace puzzles
 	auto get_combination_numbers(TNumber number = TNumber())
 		-> std::vector< std::vector<TNumber> >
 	{
-		return get_combination_numbers(assistools::inumber_to_digits(std::move(number)));
+		return this->get_combination_numbers(assistools::inumber_to_digits(std::move(number)));
 	};
 
 	/**
