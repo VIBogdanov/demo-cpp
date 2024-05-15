@@ -264,9 +264,6 @@ namespace
 
 	public:
 		GetIndexes(const TIndex& = TIndex(), const sundry::SortMethod = sundry::SortMethod::SHELL);
-		// Для обхода "вручную" объявляем реверсные итераторы, т.к. индексы будут обрабатываться от большего к меньшему.
-		auto crbegin() const noexcept { return indexes.crbegin(); }
-		auto crend() const noexcept { return indexes.crend(); }
 		// Методы begin() и end() обеспечат поэлементный обход: for(element : list) {}
 		// Т.к. алгоритм сортировки требует обход от большего к меньшему, подменяем методы begin()/end() на rbegin()/rend()
 		auto begin() const noexcept { return indexes.rbegin(); }
