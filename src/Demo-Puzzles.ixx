@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <ranges>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -74,7 +75,7 @@ namespace
 		{
 			// Отправляем всем задачам запрос на останов
 			stop_running_task_thread.request_stop();
-
+			// Ждем завершения задач
 			std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 			if (!task_list.empty())
 			{
@@ -262,19 +263,19 @@ namespace
 				// Формируем окно выборки цифр для формирования двух-, трех- и т.д. чисел
 				auto it_first_digit{ digits.begin() };
 				auto it_last_digit{ std::ranges::next(it_first_digit, _size) };
-				TDigits _buff;
-				_buff.reserve(_size);
 				while ((it_first_digit != it_last_digit) && !stop_task.stop_requested())
 				{
 					// Числа, начинающиеся с 0, пропускаем
 					if (*it_first_digit != 0)
 					{
 						// Комбинируем полученное число с цифрами оставшимися вне окна выборки
-						_buff.assign(digits.begin(), it_first_digit); // Цифры слева
-						// Формируем число из цифр, отобранных окном выборки
-						_buff.emplace_back(assistools::inumber_from_digits(it_first_digit, it_last_digit));
-						_buff.insert(_buff.end(), it_last_digit, digits.end()); // Цифры справа
-						result_buff.emplace_back(_buff);
+						auto combo_list = std::views::join(std::vector<TDigits>{
+								{ digits.begin(), it_first_digit }, // Цифры слева
+								// Формируем число из цифр, отобранных окном выборки
+								{ assistools::inumber_from_digits(it_first_digit, it_last_digit) },
+								{ it_last_digit, digits.end() } // Цифры справа
+							});
+						result_buff.emplace_back(TDigits{ combo_list.begin(), combo_list.end()});
 					}
 
 					if (it_last_digit != digits.end())
