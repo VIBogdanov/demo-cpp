@@ -3,11 +3,11 @@
 #include <execution>
 #include <future>
 #include <iterator>
+#include <ranges>
 #include <semaphore>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
-#include <ranges>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -79,6 +79,7 @@ namespace
 			std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 			if (!task_list.empty())
 			{
+				// Пытаемся выполнить ожидание задач параллельно
 				std::for_each(std::execution::par,
 					task_list.cbegin(),
 					task_list.cend(),
@@ -106,11 +107,11 @@ namespace
 		/*
 		Фоновая задача, которая предварительно собирает результаты завершенных асинхронных задач
 		по мере их готовности до момента вызова get_combinations.
-		По отдельному запросу собирает окончательный полный результат.
+		По отдельному запросу get_combinations собирает окончательный полный результат.
 		*/
 		void get_result_task(std::stop_token stop_task)
 		{
-			TResult result_list_buff{ }; // Список для частичной сборки результата дабы уменьшить число блокировок result_list
+			decltype(result_list) result_list_buff{ }; // Список для частичной сборки результата дабы уменьшить число блокировок result_list
 			// При получении запроса на останов, поток сам себя пробуждает
 			std::stop_callback stop_task_callback(stop_task, [this]
 				{
@@ -124,9 +125,11 @@ namespace
 				if ((done_task_count.load() == 0)
 					&& !stop_task.stop_requested()
 					&& !request_full_result_flag.test()) result_ready_flag.wait(false);
+				// Сбрасываем флаг пробуждения, чтобы была возможность снова заснуть по окончании цикла обработки
+				result_ready_flag.clear();
 				// Выясняем причину пробуждения
 				if (stop_task.stop_requested())
-					// Если причина пробуждения запрос на останов задачи, выходим из цикла
+					// Если причина пробуждения запрос на останов задачи, досрочно выходим из цикла обработки
 					break;
 				else if (request_full_result_flag.test()) // Поступил запрос на формирование полного результата
 				{
@@ -138,7 +141,7 @@ namespace
 						for (auto it_future{ task_list.begin() }; (it_future != task_list.end())
 							&& !stop_task.stop_requested();) // Если поступил запрос на останов, досрочно выходим
 						{
-							if (auto future_task{ *it_future }; future_task.valid()) [[likely]]
+							if (auto& future_task{ *it_future }; future_task.valid()) [[likely]]
 							{
 								// Метод wait_for нужен только для получения статусов, потому вызываем с нулевой задержкой.
 								//Для каждой задачи отрабатываем два статуса: ready и deferred
@@ -147,9 +150,9 @@ namespace
 								case std::future_status::ready: //Задача отработала и результат готов
 									//Перемещаем полученный от задачи результат в буферный список
 									std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
+									done_task_count.fetch_sub(1);
 									//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
 									it_future = task_list.erase(it_future);
-									done_task_count.fetch_sub(1);
 									break;
 								case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
 									//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
@@ -170,7 +173,7 @@ namespace
 								it_future = task_list.erase(it_future);
 						}
 					}
-					lock_task_list.unlock(); //Далее блокировка не нужна
+					lock_task_list.unlock(); //Далее блокировка списка задач не нужна
 					
 					if (!result_list_buff.empty() && !stop_task.stop_requested())
 					{
@@ -178,7 +181,7 @@ namespace
 						std::lock_guard<decltype(result_list_mutex)> lock_result_list(result_list_mutex);
 						if (accumulate_result_flag)
 						{
-							// Догружаем в итоговый result_list все, что осталось после частичных выгрузок
+							// Догружаем в итоговый result_list все, что накопилось в результате частичных выгрузок
 							if (auto _res_size{ result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
 							{
 								result_list.reserve(_buff_size);
@@ -187,10 +190,7 @@ namespace
 							}
 						}
 						else //Если аккумулировать результат не нужно, выгружаем и очищаем буфер
-						{
-							result_list.reserve(result_list_buff.size());
 							result_list = std::move(result_list_buff);
-						}
 					}
 					
 					request_full_result_flag.clear(); //Сбрасываем флаг требования получения полного результата
@@ -198,21 +198,25 @@ namespace
 				}
 				else if (done_task_count.load() > 0) // Одна из задач готова вернуть результат
 				{
+					// Для минимизации времени блокировки списка задач task_list, с помощью splice перемещаем фьючерсы
+					// завершенных задач в буферный список _done_task_list для их обработки вне блокировки
+					decltype(task_list) _done_task_list{};
 					// После получения уведомления о готовности от какой-либо из задач,
 					// просматриваем список task_list в поиске задач с готовыми результатами.
-					std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
+					std::unique_lock<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 					for (auto it_future{ task_list.begin() }; (it_future != task_list.end())
 						&& !stop_task.stop_requested() // Если поступил запрос на останов, досрочно выходим
 						&& done_task_count.load() > 0;) // Если счетчик завершенных задач обнулился, досрочно выходим
 					{
-						if (auto future_task{ *it_future }; future_task.valid()) [[likely]]
+						if (auto& future_task{ *it_future }; future_task.valid()) [[likely]]
 						{
 							if (future_task.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
 							{
-								//Перемещаем полученный от задачи результат в буферный список
-								std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
-								//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
-								it_future = task_list.erase(it_future);
+								// В отличии от erase, метод splice не сдвигает итератор на следующий элемент списка
+								// Более того, после применения splice, итератор будет указывать на _done_task_list
+								// Создаем копию итератора для splice и смещаем текущий итератор на следующий элемент
+								auto _it_future = it_future++;
+								_done_task_list.splice(_done_task_list.end(), task_list, _it_future);
 								done_task_count.fetch_sub(1);
 							}
 							else
@@ -221,9 +225,11 @@ namespace
 						else
 							it_future = task_list.erase(it_future);
 					}
+					lock_task_list.unlock();
+					//Перемещаем полученный от задачи результат в буферный список
+					for (auto& future_task : _done_task_list)
+						std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
 				}
-				// Сбрасываем флаг, чтобы снова заснуть
-				result_ready_flag.clear();
 			}
 		}
 
@@ -232,19 +238,19 @@ namespace
 		Получаем копию параметра digits, т.к. вызывающая функция будет менять набор цифр
 		не дожидаясь пока асинхронная задача отработает. Для асинхронной задачи необходима автономность данных.
 		*/
-		auto make_combination_task(TDigits digits, std::stop_token stop_task) -> TResult
+		auto make_combination_task(TDigits digits, std::stop_token stop_task) -> decltype(result_list)
 		{
+			// Каждая задача собирает свою автономную часть результатов, которые далее в цикле
+			// асинхронного получения результатов соберутся в итоговый список
+			decltype(result_list) result_buff{};
+
 			// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
 			// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
 			if (digits.empty() || stop_task.stop_requested())
-				return TResult{};
+				return result_buff;
 
 			// Получаем из пула задач разрешение на запуск. Если пул полон, ждем своей очереди
 			task_pool->acquire();
-
-			// Каждая задача собирает свою автономную часть результатов, которые далее в цикле
-			// асинхронного получения результатов соберутся в итоговый список
-			TResult result_buff{};
 
 			// Добавляем комбинацию из одиночных цифр
 			result_buff.emplace_back(digits);
@@ -339,10 +345,11 @@ namespace
 			if (!this->is_stop_requested())
 			{
 				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его вне блокировки
-				auto task_future{ std::async(policy, &GetCombinations::make_combination_task, this, std::move(digits), stop_running_task_thread.get_token()) };
+				// Создаем временный буферный список, дабы минимизировать время блокировки, используя splice для быстрой вставки
+				decltype(task_list) _buff{ std::async(policy, &GetCombinations::make_combination_task, this, std::move(digits), stop_running_task_thread.get_token()) };
 				// Блокируем доступ к task_list, т.к. уже запущен поток get_result_task, который тоже имеет доступ к task_list
 				std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
-				task_list.emplace_back(std::move(task_future));
+				task_list.splice(task_list.end(), _buff);
 			}
 		}
 
@@ -368,7 +375,7 @@ namespace
 			request_full_result_flag.test_and_set(); // Требуем собрать полный результат
 			this->notify_get_result_task(); // Отправляем требование в фоновую задачу get_result_task
 			request_full_result_flag.wait(true); // Ждем готовности полного результата
-			TResult return_result{}; //Временный список для возврата результата
+			decltype(result_list) return_result{}; //Временный список для возврата результата
 			// Если аккумулировать результат не требуется, перемещаем result_list, что приведет к обнулению списка
 			// Делаем это под блокировкой, т.к. поток get_result_task также имеет доступ к result_list
 			std::unique_lock<decltype(result_list_mutex)> lock_result_list(result_list_mutex);

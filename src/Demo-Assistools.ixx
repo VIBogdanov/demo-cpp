@@ -21,7 +21,7 @@ export namespace assistools
 	*/
 	template <typename TNumber>
 		requires std::is_integral_v<TNumber>&&
-	std::is_arithmetic_v<TNumber>
+				std::is_arithmetic_v<TNumber>
 		constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
 		-> std::vector<TNumber>
 	{
