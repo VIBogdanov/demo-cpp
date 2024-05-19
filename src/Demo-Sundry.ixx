@@ -34,8 +34,8 @@ export namespace sundry
 //****************************************** Private code *************************************************
 namespace
 {
-	template <typename TIterator, typename TItem = std::iter_value_t<TIterator>>
-	auto _find_item_by_binary(const TIterator first, const TIterator last, const TItem& target)
+	template <typename TIterator>
+	auto _find_item_by_binary(const TIterator first, const TIterator last, const std::iter_value_t<TIterator>& target)
 		-> std::make_signed_t <std::iter_difference_t<TIterator>>
 	{
 		// Получаем размер массива данных
