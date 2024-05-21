@@ -111,5 +111,19 @@ int main()
 	}
 	std::cout << "}" << std::endl;
 
+	{
+		std::cout << std::endl << " - Получить число, максимально близкое к числу X, из суммы заданных чисел." << std::endl;
+		std::cout << " closest_amount({ 20, 30, 38 }, 112) -> ";
+		auto res = puzzles::closest_amount({ 20, 30, 38 }, 112);
+		std::cout << std::format("Искомое число: {0} ", res.first) << std::endl;
+		for (std::cout << " Наборы чисел: { "; auto & list_numbers : res.second)
+		{
+			std::cout << "{ ";
+			std::ranges::for_each(list_numbers, [](const auto& n) { std::cout << n << " "; });
+			std::cout << "} ";
+		}
+		std::cout << "}" << std::endl;
+	}
+
 	return 0;
 }

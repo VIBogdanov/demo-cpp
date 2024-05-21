@@ -674,4 +674,80 @@ export namespace puzzles
 		return combination_numbers.get_combinations();
 	};
 
+
+	/**
+	@brief Получить число, максимально близкое к числу X, из суммы неотрицательных чисел массива,
+    при условии, что числа из массива могут повторяться.
+
+	@details Внимание!!! Отрицательные числа игнорируются.
+
+	@param numbers - Массив чисел
+	@param target - Целевое число
+
+	@return std::pair из искомого числа и списка(-ов) наборов чисел, сумма которых равна искомому числу
+	*/
+	template <typename TContainer = std::vector<int>, typename TNumber = typename TContainer::value_type>
+		requires std::ranges::range<TContainer>
+	&& std::is_integral_v<typename TContainer::value_type>
+		&& std::is_arithmetic_v<typename TContainer::value_type>
+		auto closest_amount(const TContainer& numbers, const TNumber& target)
+		-> std::pair<TNumber, std::vector<std::vector<TNumber>>>
+	{
+		struct CurrentSum
+		{
+			TNumber curr_sum = 0;
+			std::vector<TNumber> curr_numbers = { };
+		};
+		using TResult = std::pair<TNumber, std::vector<std::vector<TNumber>>>;
+		// Искомое число и списки чисел, суммы которых равны искомому числу
+		TNumber max_sum{ 0 };
+		std::vector<std::vector<TNumber>> max_sum_numbers{ };
+		// Очередь из промежуточных накопительных сумм и списков чисел, из которых состоят эти суммы
+		std::queue<CurrentSum> query_buff;
+		// Стартуем с нуля
+		query_buff.emplace(CurrentSum{ 0, { } });
+
+		while (!query_buff.empty())
+		{
+			// Вынимаем из очереди очередную промежуточную сумму и поочередно суммируем ее с числами из входного массива.
+			auto [current_sum, current_numbers] = query_buff.front();
+			query_buff.pop();
+			for (const auto& number : numbers)
+			{
+				// Формируем очередную сумму и набора чисел, ее составляющих.
+				// При этом новая сумма не должна быть больше искомого числа.
+				// Отрицательные числа из входного массива игнорируем.
+				if (auto next_sum{ current_sum + number }; next_sum <= target && number > 0)
+				{
+					auto next_numbers{ current_numbers };
+					next_numbers.emplace_back(number);
+					// Сортировка позволяет избежать дублирование списков
+					std::ranges::sort(next_numbers);
+					// Если очередная полученная сумма больше ранее вычисленной максимальной суммы,
+					// обновляем максимальную сумму и список чисел, которые ее формируют
+					if (max_sum < next_sum)
+					{
+						max_sum = next_sum;
+						max_sum_numbers.assign({ next_numbers });
+					}
+					// Одна и та же сумма, может быть получена различными комбинациями чисел из входного массива
+					else if (max_sum == next_sum)
+					{
+						max_sum_numbers.emplace_back(next_numbers);
+					}
+					// Добавляем в очередь очередную сумму со списком чисел для дальнейшей обработки
+					query_buff.emplace(CurrentSum{ std::move(next_sum), std::move(next_numbers) });
+				}
+			}
+		}
+		// Удаляем дубли из списка списков чисел, формирующих итоговое искомое число
+		if (max_sum_numbers.size() > 1)
+		{
+			std::ranges::sort(max_sum_numbers);
+			const auto rng = std::ranges::unique(max_sum_numbers);
+			max_sum_numbers.erase(rng.begin(), rng.end());
+		}
+
+		return TResult{ max_sum , max_sum_numbers };
+	};
 } 
