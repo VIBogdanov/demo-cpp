@@ -301,7 +301,7 @@ export namespace assistools
 	*/
 	template <typename TContainer = std::vector<int>>
 		requires std::ranges::range<TContainer>
-	bool check_includes_elements(TContainer&& data, TContainer&& pattern)
+	bool is_includes_elements(TContainer&& data, TContainer&& pattern)
 	{
 		using TElement = typename std::remove_cvref_t<TContainer>::value_type;
 		// Словарь-счетчик элементов списков
