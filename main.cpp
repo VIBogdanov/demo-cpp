@@ -25,6 +25,10 @@ int main()
 	for (const auto& [_first, _last] : assistools::get_ranges_index(50, 10))
 		std::cout << std::format("[{0},{1}) ", _first, _last);
 	std::cout << std::endl;
+
+	std::cout << std::endl << " - Функция проверяет вхождение одного набора данных в другой." << std::endl;
+	std::cout << " check_includes_elements({ 1, 2, 3, 4, 5, 6, 7, 8, 8 }, { 1, 2, 4, 8 }) -> ";
+	std::cout << std::boolalpha << assistools::check_includes_elements({ 1, 2, 3, 4, 5, 6, 7, 8, 8 }, { 1, 2, 4, 8 }) << std::endl;
 	
 	std::cout << std::endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << std::endl;
 	std::cout << " get_common_divisor(20, 12) -> ";

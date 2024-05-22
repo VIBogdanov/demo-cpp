@@ -687,10 +687,10 @@ export namespace puzzles
 	@return std::pair из искомого числа и списка(-ов) наборов чисел, сумма которых равна искомому числу
 	*/
 	template <typename TContainer = std::vector<int>, typename TNumber = typename TContainer::value_type>
-		requires std::ranges::range<TContainer>
-	&& std::is_integral_v<typename TContainer::value_type>
+	requires std::ranges::range<TContainer>
+		&& std::is_integral_v<typename TContainer::value_type>
 		&& std::is_arithmetic_v<typename TContainer::value_type>
-		auto closest_amount(const TContainer& numbers, const TNumber& target)
+	auto closest_amount(const TContainer& numbers, const TNumber& target)
 		-> std::pair<TNumber, std::vector<std::vector<TNumber>>>
 	{
 		struct CurrentSum

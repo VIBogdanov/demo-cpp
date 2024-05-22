@@ -1,11 +1,12 @@
 ﻿module;
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <numeric>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <mutex>
 export module Demo:Assistools;
 
 export namespace assistools
@@ -22,7 +23,7 @@ export namespace assistools
 	template <typename TNumber>
 		requires std::is_integral_v<TNumber>&&
 				std::is_arithmetic_v<TNumber>
-		constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
+	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
 		-> std::vector<TNumber>
 	{
 		if (number < 0) number = -number; // Знак числа отбрасываем
@@ -286,4 +287,41 @@ export namespace assistools
 		return int(ymd.year());
 	};
 
+
+	/**
+	@brief Функция проверяет вхождение одного набора данных в другой.
+
+	@details Сортировка не требуется, порядок не важен, дублирование элементов допускается,
+	относительный размер списков не принципиален.
+
+	@param data: Список, с которым сравнивается pattern.
+	@param pattern: Проверяемый список на вхождение в data.
+
+	@return bool: True - если все элементы из pattern присутствуют в data в не меньшем количестве.
+	*/
+	template <typename TContainer = std::vector<int>>
+		requires std::ranges::range<TContainer>
+	bool check_includes_elements(TContainer&& data, TContainer&& pattern)
+	{
+		using TElement = typename std::remove_cvref_t<TContainer>::value_type;
+		// Словарь-счетчик элементов списков
+		std::unordered_map<TElement, int> map_counter;
+		// Подсчитываем количество элементов в исходном списке
+		for (const auto& elm : data)
+			++map_counter[elm];
+		// Вычитаем количество элементов из проверяемого списка
+		// При этом, если в исходном списке нет такого элемента,
+		// то он будет добавлен со знаком минус.
+		for (const auto& elm : pattern)
+			--map_counter[elm];
+		// Удаляем из словаря все элементы, количество которых больше или равно нулю
+		std::erase_if(map_counter, [](const auto& item)
+			{
+				auto const& [_, value] = item;
+				return (value >= 0);
+			});
+		// Еслт словарь становится пустым, то проверяемый список полностью содержится в исходном
+		// Иначе в проверяемомо списке есть элементы, которых нет в исходном, либо их количество больше
+		return (map_counter.size() == 0);
+	};
 }
