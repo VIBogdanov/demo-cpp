@@ -198,7 +198,7 @@ namespace
 				std::is_integral_v<typename TContainer::value_type>&&
 				std::is_arithmetic_v<typename TContainer::value_type>&&
 				std::is_convertible_v<typename TContainer::value_type, TResult>
-	auto _do_find_nearest(const TContainer& digits_list, const TIterator digit_iter, const bool& previous = true)
+	auto _do_find_nearest(const TContainer& digits_list, const TIterator digit_iter, const bool previous = true)
 		-> TResult
 	{
 		// Шаблон TResult нужен только для определения корректного типа возвращаемого значения
@@ -259,7 +259,7 @@ namespace
 	template <class TIndex>
 	class GetIndexes
 	{
-		// Массив индексов, по которым будет разбит список данных для обработки
+		// Массив индексов, на которые будет разбит список данных для обработки
 		std::vector<TIndex> indexes;
 
 	public:

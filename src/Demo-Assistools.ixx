@@ -23,15 +23,14 @@ export namespace assistools
 	template <typename TNumber>
 		requires std::is_integral_v<TNumber>&&
 				std::is_arithmetic_v<TNumber>
-	constexpr auto inumber_to_digits(TNumber number = TNumber()) noexcept
+	constexpr auto inumber_to_digits(TNumber number = TNumber())
 		-> std::vector<TNumber>
 	{
 		if (number < 0) number = -number; // Знак числа отбрасываем
-		std::vector<TNumber> result;
+		std::vector<TNumber> result{ number % 10 };
 
-		do
+		while (number /= 10)
 			result.emplace_back(number % 10);
-		while (number /= 10);
 
 		result.shrink_to_fit();
 		// Можно было отказаться от reverse и в цикле использовать вставку в начало вектора,
@@ -55,8 +54,8 @@ export namespace assistools
 	requires std::is_integral_v<std::iter_value_t<TIterator>>&&
 			std::is_arithmetic_v<std::iter_value_t<TIterator>>&&
 			std::convertible_to<std::iter_value_t<TIterator>, TResult>
-	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last) noexcept
-		-> TResult
+	constexpr auto inumber_from_digits(const TIterator first, const TSIterator last)
+		-> const TResult
 	{
 		// TResult используется для указания типа возвращаемого значения отличного от int
 		auto get_number = [](TResult num, const auto& dig)->TResult
@@ -75,8 +74,8 @@ export namespace assistools
 	requires std::is_integral_v<typename std::remove_cvref_t<TContainer>::value_type>&&
 			std::is_arithmetic_v<typename std::remove_cvref_t<TContainer>::value_type>&&
 			std::convertible_to<typename std::remove_cvref_t<TContainer>::value_type, TResult>
-	constexpr auto inumber_from_digits(TContainer&& digits) noexcept
-		-> TResult
+	constexpr auto inumber_from_digits(TContainer&& digits)
+		-> const TResult
 	{
  		return inumber_from_digits<TResult>(std::ranges::begin(digits), std::ranges::end(digits));
 	};
@@ -103,7 +102,7 @@ export namespace assistools
 	*/
 	template <typename TNumber>
 	requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber()) noexcept
+	auto get_ranges_index(const TNumber& data_size, const TNumber& range_size = TNumber())
 		-> std::vector<std::pair<TNumber, TNumber>>
 	{
 		std::vector<std::pair<TNumber, TNumber>> result;
@@ -155,7 +154,8 @@ export namespace assistools
 	*/
 	template<typename TBase, typename TExp = int>
 	requires std::is_arithmetic_v<TBase> && std::is_integral_v<TExp>
-	constexpr TBase ipow(TBase i_base, TExp i_exp)
+	constexpr auto ipow(TBase i_base, TExp i_exp)  // Умышленно получаем копии
+		-> const TBase
 	{
 		// Обрабатываем пороговые значения
  		if (i_base == 1 || i_exp == 0) return 1;
@@ -249,7 +249,8 @@ export namespace assistools
 
 	template <typename TNumber>
 		requires std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
-	constexpr TNumber get_day_week_index(TNumber day, TNumber month, TNumber year)
+	constexpr auto get_day_week_index(TNumber day, TNumber month, TNumber year)
+		-> const TNumber
 	{
 		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };
 
@@ -275,13 +276,13 @@ export namespace assistools
 	};
 
 	template <typename TNumber = unsigned int>
-	constexpr std::string get_day_week_name(TNumber&& day, TNumber&& month, TNumber&& year)
+	constexpr auto get_day_week_name(TNumber&& day, TNumber&& month, TNumber&& year) -> const std::string
 	{
 		std::vector<std::string> dw{ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday","Saturday" };
 		return dw[get_day_week_index(std::forward<TNumber>(day), std::forward<TNumber>(month), std::forward<TNumber>(year))];
 	};
 
-	constexpr int get_current_year()
+	constexpr auto get_current_year() -> const int
 	{
 		std::chrono::year_month_day ymd{ std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()) };
 		return int(ymd.year());
@@ -297,25 +298,24 @@ export namespace assistools
 	@param data: Список, с которым сравнивается pattern.
 	@param pattern: Проверяемый список на вхождение в data.
 
-	@return bool: True - если все элементы из pattern присутствуют в data в не меньшем количестве.
+	@return bool: True - если все элементы из pattern присутствуют в data.
 	*/
 	template <typename TContainer = std::vector<int>>
 		requires std::ranges::range<TContainer>
-	bool is_includes_elements(TContainer&& data, TContainer&& pattern)
+	constexpr auto is_includes_elements(TContainer&& data, TContainer&& pattern) -> const bool
 	{
 		using TElement = typename std::remove_cvref_t<TContainer>::value_type;
-		// Словарь-счетчик элементов списков
+		// Словарь-счетчик элементов списка
 		std::unordered_map<TElement, int> map_counter;
 		// Подсчитываем количество элементов в исходном списке
 		for (const auto& elm : data)
 			++map_counter[elm];
-		// Вычитаем элементы из проверяемого списка
-		// При этом, если в исходном списке нет такого элемента,
+		// Вычитаем элементы проверяемого списка. При этом, если в исходном списке нет такого элемента,
 		// то он будет добавлен со знаком минус.
 		for (const auto& elm : pattern)
-			// Если хотя бы один элемент становится отрицательным, в проверяемого списке есть элементы, которых нет в исходном
+			// Если хотя бы один элемент становится отрицательным, в проверяемом списке есть элементы,
+			// которых нет в исходном. Досрочно выходим
 			if(--map_counter[elm] < 0) return false;
-			
 		// Если в словаре нет отрицательных значений, то проверяемый список полностью содержится в исходном
 		return true;
 	};

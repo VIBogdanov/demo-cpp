@@ -65,27 +65,69 @@ namespace
 		std::stop_source stop_get_result_thread;
 		// Запрос на остановку всех запущенных асинхронных задач
 		std::stop_source stop_running_task_thread;
-		// Список new_task_list призван обеспечить независимый запуск новых задач от общего списка task_list
-		std::list<TFuture> new_task_list{};
-		std::mutex new_task_list_mutex;
-		
-		// Методы add_new_task и get_new_tasks минимизируют связь между запуском новых задач
-		// и работой с общим списком задач task_list для получения результатов
-		void add_new_task(TFuture&& future)
+		// Список run_task_list призван обеспечить независимый запуск новых задач от общего списка task_list
+		std::list<TFuture> run_task_list{};
+		std::mutex run_task_list_mutex;
+		std::vector<TDigits> lazy_task_list{};
+		std::mutex lazy_task_list_mutex;
+
+
+		// Минимизируем связь между запуском новых задач и работой с общим списком задач task_list для получения результатов
+		void run_new_task(TDigits&& digits, std::launch&& policy)
 		{
-			std::lock_guard<decltype(new_task_list_mutex)> lock_task_list(new_task_list_mutex);
-			new_task_list.emplace_back(std::move(future));
+			TFuture _future;
+			switch (policy)
+			{
+			case std::launch::async:
+				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его вне блокировки
+				_future = std::async(std::launch::async, &GetCombinations::make_combination_task, this, std::move(digits));
+				{
+					std::lock_guard<decltype(run_task_list_mutex)> lock_run_task_list(run_task_list_mutex);
+					run_task_list.emplace_back(std::move(_future));
+				}
+				break;
+			case std::launch::deferred:
+				{
+					// Ленивые задачи вообще не запускаем. Просто сохраняем входные параметры для запуска в будущем
+					// Этим сокращаем размер общего списка задач task_list, что ускоряет обработку результатов завершенных задач
+					std::lock_guard<decltype(lazy_task_list_mutex)> lock_lazy_task_list(lazy_task_list_mutex);
+					lazy_task_list.emplace_back(std::move(digits));
+				}
+				break;
+			default:
+				break;
+			}
 		}
 
-		// Единственный метод, в которм присутствует зависимость между запуском новых задач и общим списком task_list
-		// Максимально быстро с помощью splice переносим новые задачи в общий список
-		void get_new_tasks()
+		// Когда поступает запрос на получение полного результата, необходимо запустить все отложенные "ленивые" задачи
+		void run_lazy_tasks()
 		{
-			std::scoped_lock lock_task_list(task_list_mutex, new_task_list_mutex);
-			task_list.splice(task_list.end(), new_task_list);
+			// Сперва считываем сохраненные данные для параметров "ленивых" задач и запускаем их как асинхронные задачи
+			// Используем временный буферный список для future, дабы сократить время блокировки run_task_list
+			decltype(run_task_list) _run_task_list_buff;
+			{
+				std::lock_guard<decltype(lazy_task_list_mutex)> lock_lazy_task_list(lazy_task_list_mutex);
+				for (auto& digits : lazy_task_list)
+					_run_task_list_buff.emplace_back(std::async(std::launch::async, &GetCombinations::make_combination_task, this, std::move(digits)));
+				lazy_task_list.clear();
+			}
+			// Максимально быстро перемещаем futures запущенных "ленивых" задач в run_task_list
+			if (!_run_task_list_buff.empty())
+			{
+				std::lock_guard<decltype(run_task_list_mutex)> lock_run_task_list(run_task_list_mutex);
+				run_task_list.splice(run_task_list.end(), _run_task_list_buff);
+			}
 		}
 
-		bool is_stop_requested() const
+		// Единственный метод, в котором присутствует зависимость между запуском новых задач и общим списком task_list
+		// Максимально быстро с помощью splice переносим новые запущенные задачи в общий список
+		void load_running_tasks()
+		{
+			std::scoped_lock lock_task_list(task_list_mutex, run_task_list_mutex);
+			task_list.splice(task_list.end(), run_task_list);
+		}
+
+		bool is_stop_requested() const noexcept
 		{
 			return stop_running_task_thread.stop_requested();
 		}
@@ -94,7 +136,7 @@ namespace
 		{
 			// Отправляем всем запущенным задачам запрос на останов и предотвращаем запуск новых задач
 			stop_running_task_thread.request_stop();
-			get_new_tasks(); // Подгружаем новые уже запущенные задачи
+			this->load_running_tasks(); // Подгружаем в task_list новые уже запущенные задачи
 			// Ждем завершения задач
 			std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 			if (!task_list.empty())
@@ -118,7 +160,8 @@ namespace
 			if (get_result_thread.joinable()) get_result_thread.join();
 		}
 
-		void notify_get_result_task()
+		// Пробуждаем задачу предварительной сборки результатов
+		void notify_get_result_task() noexcept
 		{
 			result_ready_flag.test_and_set();
 			result_ready_flag.notify_one();
@@ -129,14 +172,14 @@ namespace
 		по мере их готовности до момента вызова get_combinations.
 		По отдельному запросу get_combinations собирает окончательный полный результат.
 		*/
-		void get_result_task(std::stop_token);
+		void get_result_task();
 
 		/*
 		Функция, которая запускается как отдельная асинхронная задача.
 		Получаем копию параметра digits, т.к. вызывающая функция будет менять набор цифр
 		не дожидаясь пока асинхронная задача отработает. Для асинхронной задачи необходима автономность данных.
 		*/
-		auto make_combination_task(TDigits, std::stop_token) -> decltype(result_list);
+		auto make_combination_task(TDigits) -> decltype(result_list);
 		
 
 		void init_pool_size(TPoolSize pool_size)
@@ -147,7 +190,7 @@ namespace
 				// На случай, если std::thread::hardware_concurrency() не сработает
 				: std::make_unique<std::counting_semaphore<>>(_DEFAULT_POOL_SIZE_);
 			// Запускаем фоновую задачу предварительной сборки результатов
-			get_result_thread = std::jthread(&GetCombinations::get_result_task, this, stop_get_result_thread.get_token());
+			get_result_thread = std::jthread(&GetCombinations::get_result_task, this);
 		}
 
 	public:
@@ -179,16 +222,14 @@ namespace
 			// Зависит от заданной политики. Допускаются комбинации из асинхронных и "ленивых" задач
 			// Новые задачи запускаются только если не поступил запрос об остановке
 			if (!this->is_stop_requested())
-			{
-				// Т.к. запуск асинхронной задачи процесс длительный, выполняем его вне блокировки общего списка задач task_list
-				add_new_task(std::async(std::move(policy), &GetCombinations::make_combination_task, this, std::move(digits), stop_running_task_thread.get_token()));
-			}
+				this->run_new_task(std::move(digits), std::move(policy));
 		}
 
 		void add_digits(TNumber number, std::launch policy = std::launch::async)
 		{
 			// Числа распарсиваются в цифры и из них формируется асинхронная задача
-			if (!this->is_stop_requested()) this->add_digits(assistools::inumber_to_digits(number), std::move(policy));
+			if (!this->is_stop_requested())
+				this->run_new_task(assistools::inumber_to_digits(std::move(number)), std::move(policy));
 		}
 
 		auto get_combinations() -> decltype(result_list)
@@ -221,11 +262,12 @@ namespace
 	};
 
 	template <class TNumber>
-	void GetCombinations<TNumber>::get_result_task(std::stop_token stop_task)
+	void GetCombinations<TNumber>::get_result_task()
 	{
 		// Список для частичной сборки результата дабы уменьшить число блокировок result_list
 		decltype(result_list) result_list_buff{ };
 		// При получении запроса на останов, поток сам себя пробуждает
+		auto stop_task{ stop_get_result_thread.get_token() };
 		std::stop_callback stop_task_callback(stop_task, [this]
 			{
 				if (!result_ready_flag.test()) this->notify_get_result_task();
@@ -234,19 +276,20 @@ namespace
 		while (!stop_task.stop_requested())
 		{
 			// Ожидаем, если нет уведомления о готовности результатов из асинхронных задач make_combination_task,
-			// нет уведомления об остановке потока и нет запроса на на формирование полного результата
+			// нет уведомления об остановке потока и нет запроса на формирование полного результата
 			if ((done_task_count.load() == 0)
 				&& !stop_task.stop_requested()
 				&& !request_full_result_flag.test()) result_ready_flag.wait(false);
 			// Сбрасываем флаг пробуждения, чтобы была возможность снова заснуть по окончании цикла обработки
 			result_ready_flag.clear();
 			// Выясняем причину пробуждения
-			if (stop_task.stop_requested())
-				// Если причина пробуждения запрос на останов задачи, досрочно выходим из цикла обработки
-				break;
-			else if (request_full_result_flag.test()) // Поступил запрос на формирование полного результата
+			if (stop_task.stop_requested()) // Если причина пробуждения запрос на останов задачи, досрочно выходим
+				return;
+
+			if (request_full_result_flag.test()) // Поступил запрос на формирование полного результата
 			{
-				get_new_tasks(); // Подгружаем новые задачи
+				this->run_lazy_tasks(); // Запускаем все "ленивые" задачи
+				this->load_running_tasks(); // Подгружаем в task_list новые запущенные задачи
 				// Собираем результат при полной блокировке. Это не позволит новым задачам исказить результат
 				std::unique_lock<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 				while (!task_list.empty() && !stop_task.stop_requested())
@@ -270,7 +313,10 @@ namespace
 									it_future = task_list.erase(it_future);
 									break;
 								case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
-									//Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
+									// В данной реализации эта ветка никогда не будет выполняться, т.к. все "ленивые"
+									// задачи уже были предварительно запущены с помощью метода run_lazy_tasks()
+									// Оставлено как исторический артефакт
+									// Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
 									task_list.emplace_back(std::async(std::launch::async, [lazy_future = std::move(future_task)] { return lazy_future.get(); }));
 									//Удаляем "ленивую" задачу из списка задач
 									it_future = task_list.erase(it_future);
@@ -313,7 +359,7 @@ namespace
 			}
 			else if (done_task_count.load() > 0) // Одна из задач готова вернуть результат
 			{
-				get_new_tasks(); // Подгружаем новые задачи
+				this->load_running_tasks(); // Подгружаем в task_list новые запущенные задачи
 				// Для минимизации времени блокировки списка задач task_list, с помощью splice перемещаем фьючерсы
 				// завершенных задач в буферный список _done_task_list для их обработки вне блокировки
 				decltype(task_list) _done_task_list{};
@@ -356,11 +402,13 @@ namespace
 
 	
 	template <class TNumber>
-	auto GetCombinations<TNumber>::make_combination_task(TDigits digits, std::stop_token stop_task) -> decltype(result_list)
+	auto GetCombinations<TNumber>::make_combination_task(TDigits digits) -> decltype(result_list)
 	{
 		// Каждая задача собирает свою автономную часть результатов, которые далее в цикле
 		// асинхронного получения результатов соберутся в итоговый список
 		decltype(result_list) result_buff{};
+		// Каждая задача создает свой токен, через который принимает сигнал на останов
+		auto stop_task{ stop_running_task_thread.get_token() };
 
 		// На всякий случай проверка пороговых значений. Это может выглядеть излишней перестраховкой,
 		// т.к. вызывающая функция get_combination_numbers_async предварительно делает необходимые проверки.
@@ -445,7 +493,7 @@ export namespace puzzles
 	*/
 	template <typename TContainer = std::vector<int>>
 	auto get_number_permutations(const TContainer& source_list, const TContainer& target_list)
-		-> std::make_signed_t<typename TContainer::size_type>
+		-> const std::make_signed_t<typename TContainer::size_type>
 	{
 		using TIndex = typename TContainer::size_type;
 		using TValue = typename TContainer::value_type;
@@ -501,7 +549,7 @@ export namespace puzzles
 	auto get_pagebook_number(const typename TContainer::value_type& pages,
 							const typename TContainer::value_type& count,
 							TContainer digits) // Умышленно получаем копию списка
-		-> typename TContainer::value_type
+		-> const typename TContainer::value_type
 	{
 		// Отрабатываем некорректные параметры
 		if (count <= 0 || pages < count || digits.size() == 0) return 0;
@@ -509,7 +557,7 @@ export namespace puzzles
 		using TIndex = std::make_signed_t<typename TContainer::size_type>;
 		using TValue = typename TContainer::value_type;
 
-		auto get_near_number = [pages](const auto& last_digit) -> TValue
+		auto get_near_number = [&pages](const TValue& last_digit) -> TValue
 			{
 				// На всякий случай отбрасываем минус и от многозначных чисел оставляем последнюю цифру
 				TValue _last_digit{ ((last_digit < 0) ? -last_digit : last_digit) % 10 };
@@ -649,28 +697,27 @@ export namespace puzzles
 		using TNumber = typename std::remove_cvref_t<TContainer>::value_type;
 		using TDigits = std::vector<TNumber>;
 
-
 		auto _size{ std::ranges::distance(digits) };
 		if (_size == 0) return std::vector<TDigits>{};
 
 		TDigits _digits;
 		_digits.reserve(_size);
 
-		// Сохраняем копию исходного списка для формирования комбинаций перестановок
-		//TDigits _digits{ std::forward<TContainer>(digits) }; // Идеальный вариант, но ограничен только vector
+		// Сохраняем копию исходного списка для формирования комбинаций перестановок.
+		// TDigits _digits{ std::forward<TContainer>(digits) }; - идеальный вариант, но ограничен только vector.
 		// Т.к. неизвестно какой тип контейнера будет передан, используем максимально обобщенный вариант инициализации
 		_digits.assign(std::ranges::begin(digits), std::ranges::end(digits));
 
 		// Класс для запуска асинхронных задач. Задаем режим без аккумулирования результата
 		GetCombinations<TNumber> combination_numbers(false);
 		// Формируем следующую комбинацию из одиночных цифр
-		// Каждая комбинация передается в класс GetCombinations, который для их обработки
+		// Каждая комбинация передается в класс GetCombinations, который для её обработки
 		// запускает отдельную асинхронную задачу
 		do
 			combination_numbers.add_digits(_digits);
 		while (std::next_permutation(_digits.begin(), _digits.end()));
 		// Запрашиваем у класса GetCombinations дождаться завершения асинхронных задач,
-		// собрать результаты их работы и получить итоговый результирующий список перестановок
+		// собрать воедино результаты их работы и получить итоговый результирующий список перестановок
 		return combination_numbers.get_combinations();
 	};
 
@@ -688,8 +735,8 @@ export namespace puzzles
 	*/
 	template <typename TContainer = std::vector<int>, typename TNumber = typename TContainer::value_type>
 	requires std::ranges::range<TContainer>
-		&& std::is_integral_v<typename TContainer::value_type>
-		&& std::is_arithmetic_v<typename TContainer::value_type>
+		&& std::is_integral_v<TNumber>
+		&& std::is_arithmetic_v<TNumber>
 	auto closest_amount(const TContainer& numbers, const TNumber& target)
 		-> std::pair<TNumber, std::vector<std::vector<TNumber>>>
 	{
