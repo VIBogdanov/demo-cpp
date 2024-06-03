@@ -62,7 +62,7 @@ export namespace assistools
 			{
 				if (auto _dig{ (dig < 0) ? -dig : dig }; _dig < 10)
 					num = num * 10 + static_cast<TResult>(_dig);
-				else
+				else // Если получено N-значное число, раскладываем его на отдельные цифры
 					std::ranges::for_each(assistools::inumber_to_digits(_dig),
 						[&num](const auto& __dig) { num = num * 10 + static_cast<TResult>(__dig); });
 				return num;

@@ -93,7 +93,7 @@ namespace
 
 
 	//Объявление разно типовой переменной. Реализацию см. ниже в теле функции _find_item_by_interpolation()
-	template <typename T> T is_forward;
+	template <typename TVar> TVar is_forward;
 
 	template <typename TIterator, typename TItem = std::iter_value_t<TIterator>>
 		requires std::is_arithmetic_v<TItem>
