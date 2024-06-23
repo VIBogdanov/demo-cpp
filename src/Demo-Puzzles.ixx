@@ -342,15 +342,11 @@ namespace
 					if (accumulate_result_flag)
 					{
 						// Догружаем в итоговый result_list все, что накопилось в результате частичных выгрузок
-						if (auto _res_size{ result_list.size() }, _buff_size{ result_list_buff.size() }; _res_size < _buff_size)
-						{
-							result_list.reserve(_buff_size); // Расширяем список для получения новых данных
-							// Вычисляем, каких данных еще нет в итоговом списке. Догружаем только новые данные.
-							auto it_last_loaded_result{ std::ranges::next(result_list_buff.begin(), _res_size) };
-							result_list.insert(result_list.end(), it_last_loaded_result, result_list_buff.end());
-						}
+						result_list.reserve(result_list.size() + result_list_buff.size()); // Расширяем список для получения новых данных
+						std::ranges::move(result_list_buff, std::back_inserter(result_list)); // Догружаем новые данные.
+						result_list_buff.clear();
 					}
-					else //Если аккумулировать результат не нужно, выгружаем и очищаем буфер
+					else //Если аккумулировать результат не нужно, перезаписываем result_list, выгружая и очищая буфер
 						result_list = std::move(result_list_buff);
 				}
 

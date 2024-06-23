@@ -192,7 +192,6 @@ namespace
 
     @return  Возвращает найденное число или 0 в случае безуспешного поиска
 	*/
-
 	template <typename TResult, typename TContainer, typename TIterator = typename TContainer::iterator>
 		requires std::ranges::range<TContainer>&&
 				std::is_integral_v<typename TContainer::value_type>&&
@@ -448,7 +447,6 @@ export namespace sundry
 
 	@return (long long) Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
-
 	template <typename TContainer = std::vector<int>>
 		requires std::ranges::range<TContainer> && (!std::is_array_v<TContainer>)
 	auto find_item_by_binary(const TContainer& elements, const typename TContainer::value_type& target)
@@ -503,7 +501,6 @@ export namespace sundry
 
 	@return Индекс позиции в массиве искомого значения. Если не найдено, вернет -1.
 	*/
-
 	template <typename TContainer = std::vector<int>>
 		requires std::ranges::range<TContainer> &&
 				(!std::is_array_v<TContainer>) &&

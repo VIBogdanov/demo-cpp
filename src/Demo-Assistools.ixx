@@ -21,8 +21,8 @@ export namespace assistools
 	@return Массив цифр.
 	*/
 	template <typename TNumber>
-		requires std::is_integral_v<TNumber>&&
-				std::is_arithmetic_v<TNumber>
+		requires std::is_integral_v<TNumber>
+				&& std::is_arithmetic_v<TNumber>
 	constexpr auto inumber_to_digits(TNumber number = TNumber())
 		-> std::vector<TNumber>
 	{
