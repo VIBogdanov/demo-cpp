@@ -189,7 +189,7 @@ namespace
 		auto make_combination_task(TDigits) -> decltype(result_list);
 
 	public:
-		explicit GetCombinations(TPoolSize pool_size = 0, bool accumulate_result = true) : accumulate_result_flag{ std::move(accumulate_result) }
+		GetCombinations(TPoolSize pool_size = 0, bool accumulate_result = true) : accumulate_result_flag{ std::move(accumulate_result) }
 		{
 			auto _pool_size = (pool_size > 0) ? std::move(pool_size) : std::thread::hardware_concurrency();
 			//Инициализируем пул задач в виде счетчика-семафора
@@ -199,6 +199,9 @@ namespace
 			// Запускаем фоновую задачу предварительной сборки результатов
 			get_result_thread = std::jthread(&GetCombinations::get_result_task, this);
 		}
+
+		template <typename _TPoolSize = TPoolSize> //Требуется для неявного преобразования типа
+		explicit GetCombinations(_TPoolSize pool_size) : GetCombinations{ std::move(pool_size), true } {}
 
 		explicit GetCombinations(bool accumulate_result) : GetCombinations{ 0, std::move(accumulate_result) } {}
 
@@ -293,7 +296,7 @@ namespace
 				this->load_running_tasks(); // Подгружаем в task_list новые уже запущенные задачи
 				while (!task_list.empty() && !stop_task.stop_requested())
 				{
-					//Просматриваем список запланированных задач. При этом размер списка может динамически меняться.
+					//Просматриваем список запущенных задач. При этом размер списка может динамически меняться.
 					// Потому в каждом цикле вызываем task_list.end(), дабы получить актуальный размер списка
 					for (auto it_future{ task_list.begin() }; (it_future != task_list.end())
 						&& !stop_task.stop_requested();) // Если поступил запрос на останов, досрочно выходим
@@ -346,7 +349,7 @@ namespace
 						std::ranges::move(result_list_buff, std::back_inserter(result_list)); // Догружаем новые данные.
 						result_list_buff.clear();
 					}
-					else //Если аккумулировать результат не нужно, перезаписываем result_list, выгружая и очищая буфер
+					else //Если аккумулировать результат не нужно, перезаписываем result_list, одновременно перемещая и очищая буфер
 						result_list = std::move(result_list_buff);
 				}
 
