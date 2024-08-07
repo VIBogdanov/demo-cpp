@@ -303,7 +303,7 @@ namespace
 			break;
 
 		case sundry::SortMethod::FIBONACCI:
-			// В отличии от классической последовательности (1, 1, 2, 3, 5...) реализует (1, 2, 3, 5...)
+			// В отличии от классической последовательности (0, 1, 1, 2, 3, 5...) реализует (1, 2, 3, 5...)
 			for (TIndex prev{ 1 }, next{ 1 }; next <= list_len; prev = std::exchange(next, (next + prev)))
 				indexes.emplace_back(next);
 			break;
@@ -661,8 +661,7 @@ export namespace sundry
 	@param last - Итератор, указывающий за последний элемент данных.
 	@param revers (bool) - Если True, то сортировка по убыванию. Defaults to False.
 	*/
-	template <std::bidirectional_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
-		requires std::permutable<TIterator>
+	template <std::forward_iterator TIterator, std::sentinel_for<TIterator> TSIterator>
 	void sort_by_merge(TIterator first, TSIterator last, bool revers = false)
 	{
 		// Получаем размер массива данных
@@ -671,20 +670,20 @@ export namespace sundry
 
 		using TIndex = decltype(_size);
 		using TItem = std::iter_value_t<TIterator>;
-		using TTuple = std::tuple<TIndex, TIndex, TIndex>;
+		using TTuple = std::tuple<TIterator, TIterator, TIterator>;
 
 		// Итоговый список индексов, по которым сортируется исходный список данных
 		std::stack<TTuple> query_work;
 
 		{ // Ограничиваем область действия query_buff
 			// Временный буфер для деления диапазонов индексов пополам
-			std::queue<TTuple> query_buff;
+			std::queue<std::tuple<TIndex, TIndex, TIndex>> query_buff;
 			// Инициализируем буферную очередь исходным списком, деленным пополам
 			query_buff.emplace(0, _size >> 1, _size);
 			// Далее делим пополам обе половины до тех пор, пока в каждой половине не останется по одному элементу
 			while (!query_buff.empty())
 			{
-				auto [i_first, i_middle, i_last] = std::move(query_buff.front());
+				auto [i_first, i_middle, i_last] = query_buff.front();
 				query_buff.pop();
 				// Делим пополам левую часть
 				if (auto i_offset{ (i_middle - i_first) >> 1 })
@@ -692,8 +691,10 @@ export namespace sundry
 				// Делим пополам правую часть
 				if (auto i_offset{ (i_last - i_middle) >> 1 })
 					query_buff.emplace(i_middle, (i_middle + i_offset), i_last);
-				// Результирующий список индексов будет содержать индексы диапазонов для каждой половины
-				query_work.emplace(i_first, i_middle, i_last);
+				// Результирующий список итераторов будет содержать указатели на диапазоны для каждой половины
+				query_work.emplace(std::ranges::next(first, i_first),
+									std::ranges::next(first, i_middle),
+									std::ranges::next(first, i_last));
 			}
 		}
 
@@ -704,13 +705,9 @@ export namespace sundry
 		while (!query_work.empty())
 		{
 			// Выбираем из очереди диапазоны, начиная с меньших
-			auto [i_first, i_middle, i_last] = std::move(query_work.top());
+			auto [it_current, it_right, it_right_end] = query_work.top();
 			query_work.pop();
 
-			// Итерируем по половинчатым спискам и по исходному списку, сортируя его
-			auto it_current{ std::ranges::next(first, i_first) };
-			auto it_right{ std::ranges::next(first, i_middle) };
-			auto it_right_end{ std::ranges::next(first, i_last) };
 			// Формируем временный список с данными только  для левой половины. Правая в исходном списке
 			std::vector<TItem> left_list{ it_current, it_right };
 			auto it_left{ left_list.begin() };

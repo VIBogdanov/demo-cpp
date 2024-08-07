@@ -33,7 +33,7 @@ namespace
 	{
 		using TDigits = std::vector<TNumber>;
 		using TResult = std::vector<TDigits>;
-		using TFuture = std::shared_future<TResult>;
+		using TFuture = std::future<TResult>;
 		using TPoolSize = std::ptrdiff_t; // Тип ptrdiff_t выбран по аналогии с конструктором std::counting_semaphore
 		const TPoolSize _DEFAULT_POOL_SIZE_{ 4 };
 
@@ -114,8 +114,8 @@ namespace
 			// Запуск потоков длительная операция. Делаем это вне блокировок через буферный список.
 			if(!_lazy_task_list_buff.empty())
 				// Считываем сохраненные данные для параметров "ленивых" задач и запускаем их как асинхронные задачи
-				for (auto& digits : _lazy_task_list_buff)
-					_run_task_list_buff.emplace_back(std::async(std::launch::async, &GetCombinations::make_combination_task, this, std::move(digits)));
+				for (auto& args : _lazy_task_list_buff)
+					_run_task_list_buff.emplace_back(std::async(std::launch::async, &GetCombinations::make_combination_task, this, std::move(args)));
 
 			// Максимально быстро перемещаем futures запущенных "ленивых" задач в run_task_list
 			if (!_run_task_list_buff.empty())
@@ -137,34 +137,6 @@ namespace
 		bool is_stop_requested() const noexcept
 		{
 			return stop_running_task_thread.stop_requested();
-		}
-
-		void stop_running_task()
-		{
-			// Отправляем всем запущенным задачам запрос на останов и предотвращаем запуск новых задач
-			stop_running_task_thread.request_stop();
-			
-			std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
-			this->load_running_tasks(); // Подгружаем в task_list новые уже запущенные задачи
-			if (!task_list.empty())
-			{
-				// Пытаемся выполнить ожидание задач параллельно
-				std::for_each(std::execution::par,
-					task_list.cbegin(),
-					task_list.cend(),
-					[](auto& t) { if (t.valid()) t.wait(); });  // Ждем завершения задач
-
-				task_list.clear();
-				done_task_count.store(0);
-			}
-		}
-
-		void stop_get_result_task()
-		{
-			// Оправляем в поток запрос на останов
-			stop_get_result_thread.request_stop();
-			// Если фоновая задача предварительной сборки результатов работает, ждем ее завершения
-			if (get_result_thread.joinable()) get_result_thread.join();
 		}
 
 		// Пробуждаем задачу предварительной сборки результатов - get_result_task()
@@ -191,7 +163,7 @@ namespace
 	public:
 		GetCombinations(TPoolSize pool_size = 0, bool accumulate_result = true) : accumulate_result_flag{ std::move(accumulate_result) }
 		{
-			auto _pool_size = (pool_size > 0) ? std::move(pool_size) : std::thread::hardware_concurrency();
+ 			auto _pool_size = (pool_size > 0) ? std::move(pool_size) : std::thread::hardware_concurrency();
 			//Инициализируем пул задач в виде счетчика-семафора
 			task_pool = (_pool_size) ? std::make_unique<std::counting_semaphore<>>(_pool_size)
 				// На случай, если std::thread::hardware_concurrency() не сработает
@@ -200,22 +172,41 @@ namespace
 			get_result_thread = std::jthread(&GetCombinations::get_result_task, this);
 		}
 
-		template <typename _TPoolSize = TPoolSize> //Требуется для неявного преобразования типа
-		explicit GetCombinations(_TPoolSize pool_size) : GetCombinations{ std::move(pool_size), true } {}
+		template <typename _TPoolSize = TPoolSize> //Требуется для неявного приведения типа
+		explicit GetCombinations(_TPoolSize pool_size) : GetCombinations{ std::move(static_cast<TPoolSize>(pool_size)), true } {}
 
 		explicit GetCombinations(bool accumulate_result) : GetCombinations{ 0, std::move(accumulate_result) } {}
-
-		~GetCombinations()
-		{
-			// Останавливаем все запущенные задачи и предотвращаем запуск новых
-			this->stop_running_task();
-			// Останавливаем фоновую задачу предварительной сборки результатов
-			this->stop_get_result_task();
-		}
 
 		// Копирование запрещаем, т.к. пул асинхронных задач должен выполняться в рамках единственного экземпляра класса.
 		GetCombinations(const GetCombinations&) = delete;
 		GetCombinations& operator=(const GetCombinations&) = delete;
+
+		~GetCombinations()
+		{
+			// Отправляем всем запущенным задачам запрос на останов и предотвращаем запуск новых задач
+			stop_running_task_thread.request_stop();
+			// Останавливаем фоновую задачу предварительной сборки результатов
+			stop_get_result_thread.request_stop();
+
+			{
+				std::lock_guard<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
+				this->load_running_tasks(); // Подгружаем в task_list уже запущенные задачи
+				if (!task_list.empty())
+				{
+					// Пытаемся выполнить ожидание завершения задач параллельно
+					std::for_each(std::execution::par,
+						task_list.cbegin(),
+						task_list.cend(),
+						[](auto& t) { if (t.valid()) t.wait(); });  // Ждем завершения задач
+
+					task_list.clear();
+					done_task_count.store(0);
+				}
+			}
+
+			// Ждем завершения фоновой задачи предварительной сборки результатов
+			if (get_result_thread.joinable()) get_result_thread.join();
+		}
 
 		void add_digits(TDigits digits, std::launch policy = std::launch::async)
 		{
@@ -241,31 +232,27 @@ namespace
 			не ждем ее завершения, а переходим к следующей задаче из списка и проверяем ее готовность.
 			При готовности задачи, добавляем результат ее работы в итоговый результат и удаляем задачу из списка.
 			Повторяем цикл проверки готовности задач пока список задач не опустеет.
-			P.S. Если встречается "ленивая" задача, то ее следует запустить, но при этом не ждать пока она отработает.
-			Для этого переупаковываем "ленивые" задачи в асинхронные и добавляем в список задач. Старую "ленивую" задачу
-			из списка удаляем. Делается это через копирование фьючерса "ленивой" задачи и вызова его метода get в рамках
-			асинхронной задачи, что приводит к запуску "ленивой" задачи, но уже в качестве асинхронной
 			*/
 			request_full_result_flag.test_and_set(); // Требуем собрать полный результат
 			this->notify_get_result_task(); // Отправляем требование в фоновую задачу get_result_task
 			request_full_result_flag.wait(true); // Ждем готовности полного результата
-			decltype(result_list) return_result{}; //Временный список для возврата результата
+			decltype(result_list) _return_result{}; //Временный список для возвращаемого результата
 			// Если аккумулировать результат не требуется, перемещаем result_list, что приведет к обнулению списка
 			// Делаем это под блокировкой, т.к. поток get_result_task также имеет доступ к result_list
 			std::unique_lock<decltype(result_list_mutex)> lock_result_list(result_list_mutex);
-			return_result.reserve(result_list.size());
-			return_result = (accumulate_result_flag) ? result_list : std::move(result_list);
+			_return_result.reserve(result_list.size());
+			_return_result = (accumulate_result_flag) ? result_list : std::move(result_list);
 			lock_result_list.unlock(); //Отпускаем блокировку
 			// Сортируем для удобства восприятия (не обязательно).
-			std::ranges::sort(return_result);
-			return return_result;			
+			std::ranges::sort(_return_result);
+			return _return_result;			
 		}
 	};
 
 	template <class TNumber>
 	void GetCombinations<TNumber>::get_result_task()
 	{
-		// Список для частичной сборки результата дабы уменьшить число блокировок result_list
+		// Буфер для частичной сборки результата дабы уменьшить число блокировок result_list
 		decltype(result_list) result_list_buff{ };
 
 		auto stop_task{ stop_get_result_thread.get_token() };
@@ -277,7 +264,7 @@ namespace
 		// Если поступил запрос на остановку, завершаем фоновый процесс предварительной сборки результатов
 		while (!stop_task.stop_requested())
 		{
-			// Ожидаем, если нет уведомления о готовности результатов из асинхронных задач make_combination_task,
+			// Засыпаем, если нет уведомления о готовности результатов из асинхронных задач make_combination_task,
 			// нет уведомления об остановке потока и нет запроса на формирование полного результата
 			if ((done_task_count.load() == 0)
 				&& !stop_task.stop_requested()
@@ -291,17 +278,16 @@ namespace
 			if (request_full_result_flag.test()) // Поступил запрос на формирование полного результата
 			{
 				this->run_lazy_tasks(); // Запускаем все "ленивые" задачи
-				// Собираем результат при полной блокировке. Это не позволит новым еще не запущенным задачам исказить результат
 				std::unique_lock<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 				this->load_running_tasks(); // Подгружаем в task_list новые уже запущенные задачи
 				while (!task_list.empty() && !stop_task.stop_requested())
 				{
 					//Просматриваем список запущенных задач. При этом размер списка может динамически меняться.
 					// Потому в каждом цикле вызываем task_list.end(), дабы получить актуальный размер списка
-					for (auto it_future{ task_list.begin() }; (it_future != task_list.end())
+					for (auto future_iter{ task_list.begin() }; (future_iter != task_list.end())
 						&& !stop_task.stop_requested();) // Если поступил запрос на останов, досрочно выходим
 					{
-						if (auto& future_task{ *it_future }; future_task.valid()) [[likely]]
+						if (auto& future_task{ *future_iter }; future_task.valid()) [[likely]]
 							{
 								// Метод wait_for нужен только для получения статусов, потому вызываем с нулевой задержкой.
 								// Для каждой задачи отрабатываем два статуса: ready и deferred
@@ -312,28 +298,20 @@ namespace
 									std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
 									done_task_count.fetch_sub(1);
 									//Удаляем задачу из списка обработки. Итератор сам сместиться на следующую задачу.
-									it_future = task_list.erase(it_future);
+									future_iter = task_list.erase(future_iter);
 									break;
-								case std::future_status::deferred: //Это "ленивая" задача. Ее нужно запустить
-									// В данной реализации эта ветка никогда не будет выполняться, т.к. все "ленивые"
-									// задачи уже были предварительно запущены с помощью метода run_lazy_tasks()
-									// Оставлено как исторический артефакт
-									// Переупаковываем "ленивую" задачу в асинхронную и запускаем, добавив в список как новую задачу.
-									task_list.emplace_back(std::async(std::launch::async, [lazy_future = std::move(future_task)] { return lazy_future.get(); }));
-									//Удаляем "ленивую" задачу из списка задач
-									it_future = task_list.erase(it_future);
-									break;
+
 								case std::future_status::timeout:
 								default:
 									// Если задача еще не отработала и результат не готов, пропускаем и переходим к следующей.
 									// При этом задача остается в списке и будет еще раз проверена на готовность в следующем цикле
-									++it_future;
+									++future_iter;
 									break;
 								}
 							}
 						else
 							//Если фьючерс не валиден, удаляем соответствующую ему задачу из списка без обработки
-							it_future = task_list.erase(it_future);
+							future_iter = task_list.erase(future_iter);
 					}
 				}
 				lock_task_list.unlock(); //Далее блокировка списка задач не нужна
@@ -349,7 +327,8 @@ namespace
 						std::ranges::move(result_list_buff, std::back_inserter(result_list)); // Догружаем новые данные.
 						result_list_buff.clear();
 					}
-					else //Если аккумулировать результат не нужно, перезаписываем result_list, одновременно перемещая и очищая буфер
+					else
+						//Если аккумулировать результат не нужно, перезаписываем result_list, одновременно перемещая и очищая буфер
 						result_list = std::move(result_list_buff);
 				}
 
@@ -364,36 +343,39 @@ namespace
 				// Просматриваем список task_list в поиске задач с готовыми результатами.
 				std::unique_lock<decltype(task_list_mutex)> lock_task_list(task_list_mutex);
 				this->load_running_tasks(); // Подгружаем в task_list новые уже запущенные задачи
-				for (auto it_future{ task_list.begin() }; (it_future != task_list.end())
+				for (auto future_iter{ task_list.begin() }; (future_iter != task_list.end())
 					&& !stop_task.stop_requested() // Если поступил запрос на останов, досрочно выходим
 					&& done_task_count.load() > 0;) // Если счетчик завершенных задач обнулился, досрочно выходим
 				{
-					if (auto& future_task{ *it_future }; future_task.valid()) [[likely]]
+					if (auto& future_task{ *future_iter }; future_task.valid()) [[likely]]
 						{
 							if (future_task.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
 							{
 								// В отличии от erase, метод splice не сдвигает итератор на следующий элемент списка
 								// Более того, после применения splice, итератор будет указывать на _done_task_list
 								// Создаем копию итератора для splice и смещаем текущий итератор на следующий элемент
-								auto _it_future{ it_future++ };
-								_done_task_list.splice(_done_task_list.end(), task_list, _it_future);
+								auto _future_iter{ future_iter++ };
+								_done_task_list.splice(_done_task_list.end(), task_list, _future_iter);
 								done_task_count.fetch_sub(1);
 							}
 							else
-								++it_future;
+								++future_iter;
 						}
 					else
-						it_future = task_list.erase(it_future);
+						future_iter = task_list.erase(future_iter);
 				}
 				lock_task_list.unlock();
-				//Перемещаем полученный от задачи результат в буферный список
-				for (auto& future_task : _done_task_list)
-				{
-					if (!stop_task.stop_requested())
+
+				if (!stop_task.stop_requested())
+					//Перемещаем полученные от задач результаты в буферный список
+					for (auto& future_task : _done_task_list)
 						std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
-					else
-						future_task.wait();
-				}
+				else
+					// Корректно завершаем заачи без получения результата
+					std::for_each(std::execution::par,
+						_done_task_list.cbegin(),
+						_done_task_list.cend(),
+						[] (auto& t) { if (t.valid()) t.wait(); });
 			}
 		}
 	};
@@ -419,7 +401,7 @@ namespace
 		// Добавляем комбинацию из одиночных цифр
 		result_buff.emplace_back(digits);
 		// Сразу же добавляем число из всего набора цифр
-		if ((digits.size() > 1) && (*digits.begin() != 0) && !stop_task.stop_requested())
+		if ((digits.size() > 1) && (digits.front() != 0) && !stop_task.stop_requested())
 			result_buff.push_back({ assistools::inumber_from_digits(digits) });
 
 		/*
@@ -769,7 +751,7 @@ export namespace puzzles
 					// Сортировка позволяет избежать дублирование списков
 					std::ranges::sort(next_numbers);
 					// Если очередная полученная сумма больше ранее вычисленной максимальной суммы,
-					// обновляем максимальную сумму и список чисел, которые ее формируют
+					// обновляем максимальную сумму и перезаписываем список чисел, которые ее формируют
 					if (max_sum < next_sum)
 					{
 						max_sum = next_sum;
@@ -794,5 +776,81 @@ export namespace puzzles
 		}
 
 		return TResult{ max_sum , max_sum_numbers };
+	};
+
+
+	/**
+	@brief Находит две пары множителей в массиве чисел, дабы получить минимально возможное
+    и максимально возможное произведение. Допускаются отрицательные значения и ноль.
+
+	@details Попытка реализовать максимально обобщенный вариант без индексирования,
+    без сортировки и без изменения исходных данных. Используется только итератор.
+
+	@param numbers - Набор чисел.
+
+	@return std::pair - Пара минимального и максимального значений произведения.
+	*/
+	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+		requires std::ranges::range<TContainer>
+			&& std::is_arithmetic_v<TNumber>
+	auto get_minmax_prod(TContainer&& numbers)
+		-> std::pair<TNumber, TNumber>
+	{
+		using TResult = std::pair<TNumber, TNumber>;
+
+		auto it_num{ std::ranges::cbegin(numbers) };
+		// Отрабатываем пограничные случаи
+		{
+			auto _size{ std::ranges::distance(it_num, std::ranges::cend(numbers)) };
+			switch (_size)
+			{
+			case 0:  // Список пуст
+				return TResult{ 0, 0 };
+			case 1:  // Список из одного значения
+				return TResult{ *it_num, *it_num };
+			case 2:  // В списке два значения
+				auto _prod = (*it_num) * (*std::ranges::next(it_num));
+				return TResult{ _prod, _prod };
+			}
+		}
+		// Пары минимальных и максимальных значений инициализируем первыми числами списка
+		TNumber min1{}, min2{}, max1{}, max2{};
+		min1 = max1 = *it_num;
+		min2 = max2 = *(++it_num);
+
+		// Важно изначально инициализировать min и max корректными относительными значениями
+		if (min2 < min1)
+			min2 = std::exchange(min1, min2);
+		if (max1 < max2)
+			max2 = std::exchange(max1, max2);
+
+		// Стартуем с третьего числа списка
+		for (++it_num; it_num != std::ranges::cend(numbers); ++it_num)
+		{
+			auto num = *it_num;
+			// Все время нужно помнить, что min и max парные значения. Меняя один, меняем второй
+			if (num < min1)
+				min2 = std::exchange(min1, num);
+			else if (num < min2)
+				min2 = num;
+
+			if (max1 < num)
+				max2 = std::exchange(max1, num);
+			else if (max2 < num)
+				max2 = num;
+		}
+		// Парные произведения понадобятся далее для сравнений
+		auto min_prod = min1 * min2;
+		auto max_prod = max1 * max2;
+		TResult result{};
+
+		if (min1 < 0 and max1 < 0)  // Все числа отрицательные
+			result = std::make_pair(max_prod, min_prod);
+		else if (min1 < 0 and !(max1 < 0))  //Часть чисел отрицательные
+			result = std::make_pair(min1 * max1, (max_prod < min_prod) ? min_prod : max_prod);
+		else if (!(min1 < 0) and !(max1 < 0))  //Все числа неотрицательные (включая ноль)
+			result = std::make_pair(min_prod, max_prod);
+
+		return result;
 	};
 } 

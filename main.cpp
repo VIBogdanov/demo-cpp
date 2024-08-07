@@ -59,7 +59,7 @@ int main()
 	{
 		std::cout << std::endl << " - Сортировки методом пузырька." << std::endl;
 		std::cout << " sort_by_bubble(std::vector<int>{ 2, 3, 1, 5, 4, 7 }) -> ";
-		std::list<int> vec{ 2, 3, 1, 5, 4, 7 };
+		std::vector<int> vec{ 2, 3, 1, 5, 4, 7 };
 		sundry::sort_by_bubble(vec);
 		std::ranges::for_each(std::as_const(vec), [](const auto& n) { std::cout << n << ", "; });
 		std::cout << std::endl;
@@ -120,13 +120,22 @@ int main()
 		std::cout << " closest_amount({ 20, 30, 38 }, 112) -> ";
 		auto res = puzzles::closest_amount({ 20, 30, 38 }, 112);
 		std::cout << std::format("Искомое число: {0} ", res.first) << std::endl;
-		for (std::cout << " Наборы чисел: { "; auto & list_numbers : res.second)
+		for (std::cout << " Наборы чисел: { "; auto& list_numbers : res.second)
 		{
 			std::cout << "{ ";
 			std::ranges::for_each(list_numbers, [](const auto& n) { std::cout << n << " "; });
 			std::cout << "} ";
 		}
 		std::cout << "}" << std::endl;
+	}
+
+	{
+		std::cout << std::endl << " - Минимальное и максимальное произведение пары чисел из списка значений." << std::endl;
+		std::cout << " get_minmax_prod({ 1, -2, 5, 4 }) -> ";
+		auto res = puzzles::get_minmax_prod({ 1, -2, 5, 4 });
+		std::cout << std::endl;
+		std::cout << std::format("Минимальное произведение: {0} ", res.first) << std::endl;
+		std::cout << std::format("Максимальное произведение: {0} ", res.second) << std::endl;
 	}
 
 	return 0;
