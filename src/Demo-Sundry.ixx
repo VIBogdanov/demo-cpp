@@ -428,7 +428,7 @@ export namespace sundry
 		// По задумке for_each возвращает временный объект Ranges как rvalue, что приводит к вызову 2-й версии get_ranges().
 		// Это позволяет при возврате из функции использовать перемещение результирующего списка,
 		// а не его копирование во временный список и возврат этой временной копии.
-		return std::for_each(numbers.begin(), numbers.end(), Ranges(target)).get_ranges();
+		return std::for_each(std::ranges::cbegin(numbers), std::ranges::cend(numbers), Ranges(target)).get_ranges();
 	};
 
 	/**

@@ -781,10 +781,10 @@ export namespace puzzles
 
 	/**
 	@brief Находит две пары множителей в массиве чисел, дабы получить минимально возможное
-    и максимально возможное произведение. Допускаются отрицательные значения и ноль.
+	и максимально возможное произведение. Допускаются отрицательные значения и ноль.
 
 	@details Попытка реализовать максимально обобщенный вариант без индексирования,
-    без сортировки и без изменения исходных данных. Используется только итератор.
+	без сортировки и без изменения исходных данных. Используется только итератор.
 
 	@param numbers - Набор чисел.
 
@@ -799,20 +799,19 @@ export namespace puzzles
 		using TResult = std::pair<TNumber, TNumber>;
 
 		auto it_num{ std::ranges::cbegin(numbers) };
+
 		// Отрабатываем пограничные случаи
+		switch (std::ranges::distance(numbers))
 		{
-			auto _size{ std::ranges::distance(it_num, std::ranges::cend(numbers)) };
-			switch (_size)
-			{
-			case 0:  // Список пуст
-				return TResult{ 0, 0 };
-			case 1:  // Список из одного значения
-				return TResult{ *it_num, *it_num };
-			case 2:  // В списке два значения
-				auto _prod = (*it_num) * (*std::ranges::next(it_num));
-				return TResult{ _prod, _prod };
-			}
+		case 0:  // Список пуст
+			return TResult{ 0, 0 };
+		case 1:  // Список из одного значения
+			return TResult{ *it_num, *it_num };
+		case 2:  // В списке два значения
+			auto _prod = (*it_num) * (*std::ranges::next(it_num));
+			return TResult{ _prod, _prod };
 		}
+
 		// Пары минимальных и максимальных значений инициализируем первыми числами списка
 		TNumber min1{}, min2{}, max1{}, max2{};
 		min1 = max1 = *it_num;
@@ -828,7 +827,7 @@ export namespace puzzles
 		for (++it_num; it_num != std::ranges::cend(numbers); ++it_num)
 		{
 			auto num = *it_num;
-			// Все время нужно помнить, что min и max парные значения. Меняя один, меняем второй
+			// Все время нужно помнить, что min и max парные значения. Меняя первый, меняем второй
 			if (num < min1)
 				min2 = std::exchange(min1, num);
 			else if (num < min2)
@@ -852,5 +851,75 @@ export namespace puzzles
 			result = std::make_pair(min_prod, max_prod);
 
 		return result;
+	};
+
+
+	/**
+	@brief Из заданного набора целых чисел получить список возрастающих чисел
+    за минимальное количество изменений исходного списка. Возможны как положительные,
+    так и отрицательные значения, включая ноль. Сортировка не требуется.
+
+	@example
+    get_incremental_list([1, 7, 3, 3]) -> (2, [1, 2, 3, 4])
+    get_incremental_list([3, 2, 1]) -> (0, [3, 2, 1])
+    get_incremental_list([-2, 0, 4]) -> (1, [-2, 0, -1])
+
+	@param numbers - Заданный список целых чисел.
+
+	@return std::pair - Количество изменений и список возрастающих чисел.
+	*/
+	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+		requires std::ranges::range<TContainer>
+				&& std::is_integral_v<TNumber>
+	auto get_incremental_list(TContainer&& numbers)
+		-> std::pair<typename std::remove_cvref_t<TContainer>::size_type, std::vector<TNumber>>
+	{
+		using TSize = typename std::remove_cvref_t<TContainer>::size_type;
+		using TResult = std::pair<TSize, std::vector<TNumber>>;
+		// Определяем размер исходного списка и отрабатываем вариант пустого списка
+		auto size_data = std::ranges::distance(numbers);
+		if (size_data == 0)
+			return TResult{ 0, std::vector<TNumber>{} };
+		// Находим минимальное значение, с которого начинается отсчет
+		TNumber start_num = std::ranges::min(numbers);
+		// Вычисляем конечное значение результирующего списка, исходя из длины заданного списка
+		auto end_num = (size_data + start_num) - 1;
+		// В словарь со счетчиком загружаем из исходного списка числа, которые попадают в диапазон
+		// результирующего списка. Их менять не нужно.
+		std::unordered_map<TNumber, TSize> used_numbers_map;
+		std::ranges::for_each(numbers,
+			[&end_num, &used_numbers_map](const auto& n) { if (n <= end_num) used_numbers_map.try_emplace(n, 0); });
+		// Результирующий список и счетчик потребовавшихся изменений.
+		std::vector<TNumber> result_list{};
+		result_list.reserve(size_data);
+		TSize result_count{ 0 };
+		// Т.к. start_num (оно же минимальное число) гарантировано присутствует в результирующем
+		// списке, пропускаем его и начинаем со следующего по порядку числа.
+		for (++start_num; const auto& num : numbers)
+		{
+			// Отлавливаем две ситуации: числа не входящие в диапазон результирующего списка и
+			// повторяющиеся числа. Если число уже попало в результирующий список, то заменяем его.
+			if (num > end_num or used_numbers_map[num] > 0)
+			{
+				// Вычисляем следующее по порядку число, которым заменим "неподходящее" значение
+				while (used_numbers_map.contains(start_num))
+					++start_num;
+				// Вместо "неподходящего" числа вставляем число-заменитель
+				result_list.emplace_back(start_num);
+				// Число-заменитель сохраняем в словаре использованных чисел и сразу же переходим
+				// на следующее по порядку число-заменитель, дабы сократить цикл while (см. выше)
+				++used_numbers_map[start_num++];
+				++result_count;
+			}
+			else
+			{
+				// Число, для которого не требуется замена, просто добавляем в результирующий список
+				// и наращиваем счетчик в словаре использованных чисел
+				result_list.emplace_back(num);
+				++used_numbers_map[num];
+			}
+		}
+
+		return TResult{ result_count, result_list };
 	};
 } 

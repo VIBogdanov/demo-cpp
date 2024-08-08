@@ -131,11 +131,20 @@ int main()
 
 	{
 		std::cout << std::endl << " - Минимальное и максимальное произведение пары чисел из списка значений." << std::endl;
-		std::cout << " get_minmax_prod({ 1, -2, 5, 4 }) -> ";
 		auto res = puzzles::get_minmax_prod({ 1, -2, 5, 4 });
-		std::cout << std::endl;
-		std::cout << std::format("Минимальное произведение: {0} ", res.first) << std::endl;
-		std::cout << std::format("Максимальное произведение: {0} ", res.second) << std::endl;
+		std::cout << " get_minmax_prod({ 1, -2, 5, 4 }) -> " << std::endl;
+		std::cout << std::format(" Минимальное произведение: {0} ", res.first) << std::endl;
+		std::cout << std::format(" Максимальное произведение: {0} ", res.second) << std::endl;
+	}
+
+	{
+		std::cout << std::endl << " - Из набора целых чисел получить список возрастающих чисел за минимальное количество изменений исходного списка." << std::endl;
+		auto res = puzzles::get_incremental_list({ 7, -1, 3, 0, 0 });
+		std::cout << " get_incremental_list({ 7, -1, 3, 0, 0 }) -> " << std::endl;
+		std::cout << std::format(" Минимальное количество изменений: {0} ", res.first) << std::endl;
+		for (std::cout << " Последовательность чисел: [ "; auto & n : res.second)
+			std::cout << n << " ";
+		std::cout << "]" << std::endl;
 	}
 
 	return 0;
