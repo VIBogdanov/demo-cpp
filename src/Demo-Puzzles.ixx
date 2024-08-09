@@ -930,7 +930,8 @@ export namespace puzzles
 
 	@return std::string - Палиндром. Если сформировать палиндром не удалось, возвращается пустая строка.
 	*/
-	auto get_word_palindrome(const std::string&& chars, bool with_separator = true) -> std::string
+	auto get_word_palindrome(const std::string&& chars, bool with_separator = true)
+		-> typename std::remove_cvref_t<decltype(chars)>
 	{
 		using TString = typename std::remove_cvref_t<decltype(chars)>;
 		using TChar = TString::value_type;
@@ -965,7 +966,7 @@ export namespace puzzles
 			// Определяем символ-разделитель как лексикографически минимальный
 			if (with_separator and !separator_candidate.empty())
 				result += std::ranges::min(std::move(separator_candidate));
-			// Собираем результирующий палиндром
+			// Собираем итоговый палиндром
 			result.append(half_palindrome.rbegin(), half_palindrome.rend());
 		}
 
