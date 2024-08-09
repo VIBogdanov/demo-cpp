@@ -920,4 +920,55 @@ export namespace puzzles
 
 		return TResult{ result_count, result_list };
 	};
+
+
+	/**
+	@brief Из заданного набора символов сформировать палиндром.
+
+	@param chars - Список символов.
+	@param with_separator - Добавлять символ-разделитель. Default: true
+
+	@return std::string - Палиндром. Если сформировать палиндром не удалось, возвращается пустая строка.
+	*/
+	auto get_word_palindrome(const std::string&& chars, bool with_separator = true) -> std::string
+	{
+		using TString = typename std::remove_cvref_t<decltype(chars)>;
+		using TChar = TString::value_type;
+		TString result{};
+		// Массив для аккумулирования кандидатов для символа-разделителя между половинами палиндрома
+		std::vector<TChar> separator_candidate{};
+		TString half_palindrome{};
+		{ // Безыменный namespace ограничивает время жизни char_count_map
+			// Подсчитываем количество символов в заданном наборе
+			std::unordered_map<TChar, size_t> char_count_map;
+			for (const auto& chr : chars)
+				++char_count_map[chr];
+
+			std::ranges::for_each(char_count_map, [&separator_candidate, &half_palindrome, &with_separator](const auto& item)
+				{
+					auto const& [_char, _count] = item;
+					// Если количество символа нечетное, то это потенциальный символ-разделитель
+					if (with_separator and (_count & 1))
+						separator_candidate.emplace_back(_char);
+					// Формируем половину палиндрома из символов, у которых количество пар одна и более
+					if (auto pair_count{ _count >> 1 }; pair_count > 0)
+						half_palindrome.append(pair_count, _char);
+				});
+		}
+
+		if (!half_palindrome.empty())
+		{
+			result.reserve((half_palindrome.size() << 1) + (separator_candidate.empty() ? 0 : 1));
+			// Формируем левую половину палиндрома
+			std::ranges::sort(half_palindrome);
+			result = half_palindrome;
+			// Определяем символ-разделитель как лексикографически минимальный
+			if (with_separator and !separator_candidate.empty())
+				result += std::ranges::min(std::move(separator_candidate));
+			// Собираем результирующий палиндром
+			result.append(half_palindrome.rbegin(), half_palindrome.rend());
+		}
+
+		return result;
+	};
 } 

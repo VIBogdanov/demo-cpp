@@ -277,14 +277,14 @@ namespace
 		switch (method)
 		{
 		case sundry::SortMethod::HIBBARD:
-			// (1 << i) = 2^i
+			// (1 << i) == 2^i
 			for (TIndex i{ 1 }, res{ (1 << i) - 1 }; res <= list_len; res = (1 << ++i) - 1)
 				indexes.emplace_back(res);
 			break;
 
 		case sundry::SortMethod::SEDGEWICK:
 			// (1 << i) = 2^i    (n >> 1) = n/2   (i & 1) - четное\нечетное
-			auto _sedgewick = [](const TIndex & i) -> TIndex
+			auto _sedgewick = [](const TIndex& i) -> TIndex
 				{
 					return (i & 1) ? 8 * (1 << i) - 6 * (1 << ((i + 1) >> 1)) + 1
 						: 9 * ((1 << i) - (1 << (i >> 1))) + 1;

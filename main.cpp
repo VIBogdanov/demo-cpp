@@ -147,5 +147,8 @@ int main()
 		std::cout << "]" << std::endl;
 	}
 
+	std::cout << std::endl << " - Из заданного набора символов формирует слово-палиндром." << std::endl;
+	std::cout << " get_word_palindrome('bbacdabb') -> " << puzzles::get_word_palindrome("bbacdabb") << std::endl;
+
 	return 0;
 }
