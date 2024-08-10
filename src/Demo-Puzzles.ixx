@@ -945,16 +945,15 @@ export namespace puzzles
 			for (const auto& chr : chars)
 				++char_count_map[chr];
 
-			std::ranges::for_each(char_count_map, [&separator_candidate, &half_palindrome, &with_separator](const auto& item)
-				{
-					auto const& [_char, _count] = item;
-					// Если количество символа нечетное, то это потенциальный символ-разделитель
-					if (with_separator and (_count & 1))
-						separator_candidate.emplace_back(_char);
-					// Формируем половину палиндрома из символов, у которых количество пар одна и более
-					if (auto pair_count{ _count >> 1 }; pair_count > 0)
-						half_palindrome.append(pair_count, _char);
-				});
+			for (const auto& [_char, _count] : char_count_map)
+			{
+				// Если количество символа нечетное, то это потенциальный символ-разделитель
+				if (with_separator and (_count & 1))
+					separator_candidate.emplace_back(_char);
+				// Формируем половину палиндрома из символов, у которых количество пар одна и более
+				if (auto pair_count{ _count >> 1 }; pair_count > 0)
+					half_palindrome.append(pair_count, _char);
+			}
 		}
 
 		if (!half_palindrome.empty())
