@@ -859,4 +859,51 @@ export namespace sundry
 	{
 		sort_by_selection(std::ranges::begin(data), std::ranges::end(data), std::move(revers));
 	};
+
+
+	/**
+	@brief В заданном наборе чисел найти неповторяющиеся пары чисел, сумма которых равна целевому значению.
+
+	@details Допускаются отрицательные, нулевые и повторяющиеся числа. Предварительная сортировка не требуется.
+
+	@param digits - Набор чисел.
+	@param target - Целевое значение.
+
+	@return Список пар.
+	*/
+	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+		requires std::ranges::range<TContainer> && std::is_integral_v<TNumber>
+	auto find_pairs_sum(TContainer&& digits, TNumber&& target)
+		-> std::vector<std::pair<TNumber, TNumber>>
+	{
+		using TResult = std::vector<std::pair<TNumber, TNumber>>;
+		using TDigits = std::vector<TNumber>;
+
+		TResult result_list{};
+
+		auto _size{ std::ranges::distance(digits) };
+		if (_size == 0) return result_list;
+		// Копируем входной набор чисел, сортируем и очищаем от дублей. Сортировка обязательна
+		TDigits _digits;
+		_digits.reserve(_size);
+		_digits.assign(std::ranges::cbegin(digits), std::ranges::cend(digits));
+		std::ranges::sort(_digits);
+		_digits.erase(std::ranges::unique(_digits).begin(), _digits.end());
+		// Задаем индексы первого и последнего числа списка и запускаем цикл встречного перебора
+		for (auto it_begin{ _digits.begin() }, it_end{ std::ranges::prev(_digits.end()) };
+			it_begin <= it_end;)
+		{
+			// Если сумму больше целевого значения, сдвигаем конечный индекс к началу списка
+			if (TNumber pair_sum{ *it_begin + *it_end }; pair_sum > target)
+				--it_end;
+			// Найдена искомая сумма. Сохраняем пару слагаемых и сдвигаем конечный индекс к началу
+			else if (pair_sum == target)
+				result_list.emplace_back(*it_begin, *it_end--);
+			// Если сумма меньше, наращиваем начальный индекс
+			else
+				++it_begin;
+		}
+
+		return result_list;
+	};
 }

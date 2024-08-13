@@ -150,5 +150,11 @@ int main()
 	std::cout << std::endl << " - Из заданного набора символов формирует слово-палиндром." << std::endl;
 	std::cout << " get_word_palindrome('bbacdabb') -> " << puzzles::get_word_palindrome("bbacdabb") << std::endl;
 
+	std::cout << std::endl << " - Поиск неповторяющихся пар чисел, сумма которых равна целевому значению." << std::endl;
+	std::cout << " find_pairs_sum([3, 1, 2, 3, 0, 2, -1, 5, 4, 7, 6], 5) -> [ ";
+	for (const auto& p : sundry::find_pairs_sum({ 3, 1, 2, 3, 0, 2, -1, 5, 4, 7, 6 }, 5))
+		std::cout << std::format("({0},{1}) ", p.first, p.second);
+	std::cout << "]" << std::endl;
+
 	return 0;
 }

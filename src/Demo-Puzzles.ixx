@@ -936,7 +936,7 @@ export namespace puzzles
 		using TString = typename std::remove_cvref_t<decltype(chars)>;
 		using TChar = TString::value_type;
 		TString result{};
-		// Массив для аккумулирования кандидатов для символа-разделителя между половинами палиндрома
+		// Массив для аккумулирования кандидатов символов-разделителей между половинами палиндрома
 		std::vector<TChar> separator_candidate{};
 		TString half_palindrome{};
 		{ // Безыменный namespace ограничивает время жизни char_count_map
