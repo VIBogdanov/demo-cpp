@@ -29,6 +29,10 @@ int main()
 	std::cout << std::endl << " - Функция проверяет вхождение одного набора данных в другой." << std::endl;
 	std::cout << " is_includes_elements({ 1, 2, 3, 4, 5, 6, 7, 8, 8 }, { 1, 2, 4, 8 }) -> ";
 	std::cout << std::boolalpha << assistools::is_includes_elements({ 1, 2, 3, 4, 5, 6, 7, 8, 8 }, { 1, 2, 4, 8 }) << std::endl;
+
+	std::cout << std::endl << " - Перемножение двух целочисленных значений через сложение." << std::endl;
+	std::cout << " rinda_multiplication(89, -18) -> ";
+	std::cout << assistools::rinda_multiplication(89, -18) << std::endl;
 	
 	std::cout << std::endl << " - Функция нахождения наибольшего общего делителя двух целых чисел без перебора методом Евклида." << std::endl;
 	std::cout << " get_common_divisor(20, 12) -> ";

@@ -26,7 +26,7 @@ export namespace assistools
 	constexpr auto inumber_to_digits(TNumber number = TNumber())
 		-> std::vector<TNumber>
 	{
-		if (number < 0) number = -number; // Знак числа отбрасываем
+		if (number < 0) number = (~number + 1); // Знак числа отбрасываем
 		std::vector<TNumber> result{ number % 10 };
 
 		while (number /= 10)
@@ -60,7 +60,7 @@ export namespace assistools
 		// TResult используется для указания типа возвращаемого значения отличного от int
 		auto get_number = [](TResult num, const auto& dig)->TResult
 			{
-				if (auto _dig{ (dig < 0) ? -dig : dig }; _dig < 10)
+				if (auto _dig{ (dig < 0) ? (~dig + 1) : dig }; _dig < 10)
 					num = num * 10 + static_cast<TResult>(_dig);
 				else // Если получено N-значное число, раскладываем его на отдельные цифры
 					std::ranges::for_each(assistools::inumber_to_digits(_dig),
@@ -110,7 +110,7 @@ export namespace assistools
 		// Сохраняем знак
 		TNumber sign{ (data_size < 0) ? -1 : 1 };
 		// Далее работаем без знака
-		auto _abs = [](auto& x) { return (x < 0) ? -x : x;  };
+		auto _abs = [](auto& x) { return (x < 0) ? (~x + 1) : x;  };
 		TNumber current_index{ 0 };
 		TNumber _data_size{ _abs(data_size) };
 		TNumber _range_size{ (range_size == 0) ? _data_size : _abs(range_size) };
@@ -252,7 +252,7 @@ export namespace assistools
 	constexpr auto get_day_week_index(TNumber day, TNumber month, TNumber year)
 		-> const TNumber
 	{
-		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? -n : n; };
+		constexpr auto _abs = [](TNumber n) ->TNumber { return (n < 0) ? (~n + 1) : n; };
 
 		if (auto m{ _abs(month) % 12 }) month = m;
 		else month = 12;
@@ -318,5 +318,63 @@ export namespace assistools
 			if(--map_counter[elm] < 0) return false;
 		// Если в словаре нет отрицательных значений, то проверяемый список полностью содержится в исходном
 		return true;
+	};
+
+
+	/**
+	@brief Выполняет перемножение двух целочисленных значений через сложение и битовые операций деления/умножения на 2.
+	Учитывается знак множителей.
+
+	@details Пошаговый алгоритм умножения (89 * 18):
+    1. Определить минимальное значение (18).
+    2. Пошагово 18 делим на 2 без остатка, а 89 умножаем на 2, посредством смещения на 1 бит вправо/влево.
+    Деление/умножение выполняется попарно.
+    3. Четные значения, полученные после деления на 2, отбрасываем. Также отбрасываем
+    соответствующую пару, полученную умножением на 2 второго значения.
+    4. Когда деление на 2 достигнет единицы, цикл итераций деления/умножения прекращается.
+    5. Оставшиеся значения, которые умножались на 2, суммируются. Полученная сумма есть результат перемножения.
+
+    После второго шага получаем набор пар:
+    (18, 89)
+    (9, 178)
+    (4, 356)
+    (2, 712)
+    (1, 1424)
+
+    После третьего шага
+    (9, 178)
+    (1, 1424)
+
+    На пятом шаге получаем результат: 178 + 1424 = 1602
+
+	@param a: Первый множитель.
+	@param b: Второй множитель.
+
+	@return Произведение a*b.
+	*/
+	template <typename TNumber = int>
+		requires std::is_integral_v<TNumber>&& std::is_arithmetic_v<TNumber>
+	TNumber rinda_multiplication(const TNumber& a, const TNumber& b)
+	{
+		TNumber result{ 0 };
+		// Определяем знак результирующего произведения.
+		// Если одно из значений <0, то результат отрицательный.
+		// Если оба <0 или >0, то положительный.
+		bool is_positive{ ((a < 0) ^ (b < 0)) ? false : true };
+		// Работаем с абсолютными целочисленными значениями
+		auto _abs = [](const auto& x) { return (x < 0) ? (~x + 1) : x;  };
+		TNumber num_a{ _abs(a) };
+		TNumber num_b{ _abs(b) };
+		// Для уменьшения количества итераций, выбираем наименьший множитель
+		if (num_b < num_a) std::swap(num_a, num_b);
+		// Выполняем попарное деление/умножение на 2, и фильтруем четные значения, полученные после деления на 2.
+		while (num_a > 0)
+		{
+			if (num_a & 1) result += num_b;
+			num_a >>= 1;
+			num_b <<= 1;
+		}
+
+		return is_positive ? result : -result;
 	};
 }
