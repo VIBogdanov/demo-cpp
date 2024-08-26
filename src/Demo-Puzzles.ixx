@@ -975,11 +975,13 @@ export namespace puzzles
 	};
 
 
-	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+	template <typename TContainer = std::vector<int>,
+		typename TNumber = typename std::remove_cvref_t<TContainer>::value_type,
+		typename TIndex = typename std::remove_cvref_t<TContainer>::size_type>
 		requires std::ranges::range<TContainer> && std::is_arithmetic_v<TNumber>
-	auto get_minmax_ranges(TContainer&& numbers) -> std::map<std::string, std::vector<std::pair<int, int>>>
+	auto get_minmax_ranges(TContainer&& numbers) -> std::map<std::string, std::vector<std::pair<TIndex, TIndex>>>
 	{
-		using TRanges = std::vector<std::pair<int, int>>;
+		using TRanges = std::vector<std::pair<TIndex, TIndex>>;
 		using TResult = std::map<std::string, TRanges>;
 
 		auto iter_numbers{ std::ranges::cbegin(numbers) };
@@ -1010,11 +1012,11 @@ export namespace puzzles
 
 			Sum(const TNumber& init_number, SumMode init_mode) : sum{ init_number }, mode{ init_mode } { }
 
-			void operator()(const int& idx, const TNumber& number)
+			void operator()(const TIndex& idx, const TNumber& number)
 			{
 				accumulated += number;
 
-				if (!((mode == SumMode::MAX) ? accumulated < sum : accumulated > sum))
+				if ((mode == SumMode::MAX) ? accumulated >= sum : accumulated <= sum)
 				{
 					if ((mode == SumMode::MAX) ? accumulated > sum : accumulated < sum)
 					{
@@ -1025,7 +1027,7 @@ export namespace puzzles
 						ranges.emplace_back(i, idx);
 				}
 
-				if (!((mode == SumMode::MAX) ? accumulated > 0 : accumulated < 0))
+				if ((mode == SumMode::MAX) ? accumulated <= 0 : accumulated >= 0)
 				{
 					if ((mode == SumMode::MAX) ? accumulated < 0 : accumulated > 0)
 					{
@@ -1039,22 +1041,22 @@ export namespace puzzles
 		private:
 			SumMode mode;
 			TNumber accumulated{ 0 };
-			std::vector<int> begin_list{ 0 };
+			std::vector<TIndex> begin_list{ 0 };
 		};
 
-		Sum minsum{ *iter_numbers, SumMode::MIN };
-		Sum maxsum{ *iter_numbers, SumMode::MAX };
+		Sum min_sum{ *iter_numbers, SumMode::MIN };
+		Sum max_sum{ *iter_numbers, SumMode::MAX };
 
-		for (int idx{ 0 }; iter_numbers != std::ranges::cend(numbers); ++iter_numbers, ++idx)
+		for (TIndex idx{ 0 }; iter_numbers != std::ranges::cend(numbers); ++iter_numbers, ++idx)
 		{
-			minsum(idx, *iter_numbers);
-			maxsum(idx, *iter_numbers);
+			min_sum(idx, *iter_numbers);
+			max_sum(idx, *iter_numbers);
 		}
 
 		return TResult
 		{
-			{ std::format(" Min sum: {0} ", minsum.sum), minsum.ranges },
-			{ std::format(" Max sum: {0} ", maxsum.sum), maxsum.ranges }
+			{ std::format(" Min sum: {0} ", min_sum.sum), min_sum.ranges },
+			{ std::format(" Max sum: {0} ", max_sum.sum), max_sum.ranges }
 		};
 	};
 } 
