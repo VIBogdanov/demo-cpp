@@ -997,7 +997,7 @@ export namespace puzzles
 			};
 		}
 
-		enum class SumMode
+		enum struct SumMode
 		{
 			MIN,
 			MAX
@@ -1005,17 +1005,12 @@ export namespace puzzles
 
 		struct Sum
 		{
-			SumMode mode;
 			TNumber sum;
-			TNumber accumulated{ 0 };
 			TRanges ranges{};
-			std::vector<int> begin_list{ 0 };
 
 			Sum(const TNumber& init_number, SumMode init_mode) : sum{ init_number }, mode{ init_mode } { }
 
-			//void operator()(int n) { sum += n; }
-
-			void accumulation(const int& idx, const TNumber& number)
+			void operator()(const int& idx, const TNumber& number)
 			{
 				accumulated += number;
 
@@ -1040,6 +1035,11 @@ export namespace puzzles
 					begin_list.emplace_back(idx + 1);
 				}
 			}
+
+		private:
+			SumMode mode;
+			TNumber accumulated{ 0 };
+			std::vector<int> begin_list{ 0 };
 		};
 
 		Sum minsum{ *iter_numbers, SumMode::MIN };
@@ -1047,8 +1047,8 @@ export namespace puzzles
 
 		for (int idx{ 0 }; iter_numbers != std::ranges::cend(numbers); ++iter_numbers, ++idx)
 		{
-			minsum.accumulation(idx, *iter_numbers);
-			maxsum.accumulation(idx, *iter_numbers);
+			minsum(idx, *iter_numbers);
+			maxsum(idx, *iter_numbers);
 		}
 
 		return TResult
