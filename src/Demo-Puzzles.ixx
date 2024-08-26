@@ -1,6 +1,7 @@
 ﻿module;
 #include <algorithm>
 #include <execution>
+#include <format>
 #include <future>
 #include <iterator>
 #include <ranges>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <map>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -970,5 +972,89 @@ export namespace puzzles
 		}
 
 		return result;
+	};
+
+
+	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+		requires std::ranges::range<TContainer> && std::is_arithmetic_v<TNumber>
+	auto get_minmax_ranges(TContainer&& numbers) -> std::map<std::string, std::vector<std::pair<int, int>>>
+	{
+		using TRanges = std::vector<std::pair<int, int>>;
+		using TResult = std::map<std::string, TRanges>;
+
+		auto iter_numbers{ std::ranges::cbegin(numbers) };
+
+		// Отрабатываем пограничные случаи
+		switch (std::ranges::distance(numbers))
+		{
+		case 0:  // Список пуст
+			return TResult{ { "Data is empty!", {} } };
+		case 1:  // Список из одного значения
+			return TResult
+			{
+				{ std::format(" Min sum: {0} ", *iter_numbers), TRanges{std::make_pair(0, 0)} },
+				{ std::format(" Max sum: {0} ", *iter_numbers), TRanges{std::make_pair(0, 0)} }
+			};
+		}
+
+		enum class SumMode
+		{
+			MIN,
+			MAX
+		};
+
+		struct Sum
+		{
+			SumMode mode;
+			TNumber sum;
+			TNumber accumulated{ 0 };
+			TRanges ranges{};
+			std::vector<int> begin_list{ 0 };
+
+			Sum(const TNumber& init_number, SumMode init_mode) : sum{ init_number }, mode{ init_mode } { }
+
+			//void operator()(int n) { sum += n; }
+
+			void accumulation(const int& idx, const TNumber& number)
+			{
+				accumulated += number;
+
+				if (!((mode == SumMode::MAX) ? accumulated < sum : accumulated > sum))
+				{
+					if ((mode == SumMode::MAX) ? accumulated > sum : accumulated < sum)
+					{
+						sum = accumulated;
+						ranges.clear();
+					}
+					for (const auto& i : begin_list)
+						ranges.emplace_back(i, idx);
+				}
+
+				if (!((mode == SumMode::MAX) ? accumulated > 0 : accumulated < 0))
+				{
+					if ((mode == SumMode::MAX) ? accumulated < 0 : accumulated > 0)
+					{
+						accumulated = 0;
+						begin_list.clear();
+					}
+					begin_list.emplace_back(idx + 1);
+				}
+			}
+		};
+
+		Sum minsum{ *iter_numbers, SumMode::MIN };
+		Sum maxsum{ *iter_numbers, SumMode::MAX };
+
+		for (int idx{ 0 }; iter_numbers != std::ranges::cend(numbers); ++iter_numbers, ++idx)
+		{
+			minsum.accumulation(idx, *iter_numbers);
+			maxsum.accumulation(idx, *iter_numbers);
+		}
+
+		return TResult
+		{
+			{ std::format(" Min sum: {0} ", minsum.sum), minsum.ranges },
+			{ std::format(" Max sum: {0} ", maxsum.sum), maxsum.ranges }
+		};
 	};
 } 

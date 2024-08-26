@@ -160,5 +160,18 @@ int main()
 		std::cout << std::format("({0},{1}) ", p.first, p.second);
 	std::cout << "]" << std::endl;
 
+	{
+		std::cout << std::endl << " - Поиск в списке непрерывной последовательности чисел, сумма которых минимальна/максимальна." << std::endl;
+		auto res = puzzles::get_minmax_ranges({ -1, 3, -2, 5, -6, 6, -6 });
+		std::cout << " get_minmax_ranges({ -1, 3, -2, 5, -6, 6, -6 }) -> " << std::endl;
+		for (const auto& [k, v] : res)
+		{
+			std::cout << k;
+			for (const auto& [a, b] : v)
+				std::cout << std::format("({0}, {1}) ", a, b);
+			std::cout << std::endl;
+		}
+	}
+
 	return 0;
 }
