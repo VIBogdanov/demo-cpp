@@ -166,10 +166,10 @@ int main()
 		std::cout << " get_minmax_ranges({ -1, 3, -2, 5, -6, 6, -6 }) -> " << std::endl;
 		for (const auto& [k, v] : res)
 		{
-			std::cout << k;
+			std::cout << k << " [ ";
 			for (const auto& [a, b] : v)
 				std::cout << std::format("({0}, {1}) ", a, b);
-			std::cout << std::endl;
+			std::cout << "]" << std::endl;
 		}
 	}
 
