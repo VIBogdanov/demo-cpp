@@ -929,10 +929,11 @@ export namespace puzzles
 
 	@param chars - Список символов.
 	@param with_separator - Добавлять символ-разделитель. Default: true
+	@param sort - Сортировать половины палиндрома. Default: true
 
 	@return std::string - Палиндром. Если сформировать палиндром не удалось, возвращается пустая строка.
 	*/
-	auto get_word_palindrome(const std::string&& chars, bool with_separator = true)
+	auto get_word_palindrome(const std::string&& chars, bool with_separator = true, bool sort = true)
 		-> typename std::remove_cvref_t<decltype(chars)>
 	{
 		using TString = typename std::remove_cvref_t<decltype(chars)>;
@@ -941,9 +942,9 @@ export namespace puzzles
 		// Массив для аккумулирования кандидатов символов-разделителей между половинами палиндрома
 		std::vector<TChar> separator_candidate{};
 		TString half_palindrome{};
-		{ // Безыменный namespace ограничивает время жизни char_count_map
-			// Подсчитываем количество символов в заданном наборе
+		{ // Безымянный namespace ограничивает время жизни char_count_map
 			std::unordered_map<TChar, size_t> char_count_map;
+			// Подсчитываем количество символов в заданном наборе
 			for (const auto& chr : chars)
 				++char_count_map[chr];
 
@@ -962,7 +963,8 @@ export namespace puzzles
 		{
 			result.reserve((half_palindrome.size() << 1) + (separator_candidate.empty() ? 0 : 1));
 			// Формируем левую половину палиндрома
-			std::ranges::sort(half_palindrome);
+			if (sort)
+				std::ranges::sort(half_palindrome);
 			result = half_palindrome;
 			// Определяем символ-разделитель как лексикографически минимальный
 			if (with_separator and !separator_candidate.empty())
@@ -1055,7 +1057,7 @@ export namespace puzzles
 					if ((mode == SumMode::MAX) ? accumulated > sum : accumulated < sum)
 					{
 						sum = accumulated; // Сохраняем накопленную сумму как искомую
-						ranges.clear(); // Сбрасываем список пар индексов и формаруем новый
+						ranges.clear(); // Сбрасываем список пар индексов и формируем новый
 					}
 					// Если накопленная сумма больше/меньше или равна, то формируем список пар начальных и конечных индексов
 					for (const auto& begin_index : begin_index_list)
