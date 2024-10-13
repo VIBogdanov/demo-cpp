@@ -2,6 +2,7 @@
 #include <clocale>
 #include <iostream>
 #include <list>
+#include <ranges>
 #include <vector>
 #include <chrono>
 
@@ -172,6 +173,14 @@ int main()
 			std::cout << "]" << std::endl;
 		}
 	}
+
+	std::cout << std::endl << " - Найти заданное число групп с минимальными разницами между числами в группах и выбрать группу с максимальной разницей." << std::endl;
+	std::cout << " get_max_from_min_difference(3, 3, { 1, 1, 1, 2, 2, 2, 2, 10, 10 }) -> ";
+	if (auto res{ puzzles::get_max_from_min_difference(3, 3, { 1, 1, 1, 2, 2, 2, 2, 10, 10 }) })
+		std::cout << *res;
+	else
+		std::cout << "Невозможно определить значение!";
+	std::cout << std::endl;
 
 	return 0;
 }

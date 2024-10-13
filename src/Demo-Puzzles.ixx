@@ -4,12 +4,13 @@
 #include <format>
 #include <future>
 #include <iterator>
+#include <map>
+#include <optional>
 #include <ranges>
 #include <semaphore>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
-#include <map>
 export module Demo:Puzzles;
 
 import :Assistools;
@@ -373,7 +374,7 @@ namespace
 					for (auto& future_task : _done_task_list)
 						std::ranges::move(future_task.get(), std::back_inserter(result_list_buff));
 				else
-					// Корректно завершаем заачи без получения результата
+					// Корректно завершаем задачи без получения результата
 					std::for_each(std::execution::par,
 						_done_task_list.cbegin(),
 						_done_task_list.cend(),
@@ -1100,5 +1101,81 @@ export namespace puzzles
 			{ std::format(" Min sum: {0} ", min_sum.sum), min_sum.ranges },
 			{ std::format(" Max sum: {0} ", max_sum.sum), max_sum.ranges }
 		};
+	};
+
+
+	/**
+	@brief Найти заданное число групп с минимальными разницами между числами в группах и из них выбрать
+	группу с максимальной разницей. Вернуть значение максимальной разницы найденной группы.
+
+	@details Формируется список пар (ключ, значение) всех возможных групп. В каждой группе числа отсортированы.
+    Значения - это разница между последним и первым числом в группе. Ключи - индекс группы в исходном
+    предварительно отсортированном массиве данных. Ключи дополнительно играют роль определителей
+    пересечения диапазонов индексов групп, т.к. одно и то же число может содержаться в нескольких
+    группах. Необходимо будет отбирать группы с непересекающимися диапазонами чисел, для чего понадобятся
+    ключи и шаг непересекающихся диапазонов.
+
+	@example
+	get_max_from_min_difference(3, 3, { 1, 1, 1, 2, 2, 2, 2, 10, 10, 11 }) -> 1
+	get_max_from_min_difference(3, 3, { 1, 1, 1, 2, 2, 2, 2, 10, 10 }) -> 8
+	get_max_from_min_difference(2, 3, { 1, 1, 2, 2, 2, 3, 3 }) -> 1
+	get_max_from_min_difference(2, 3, { 170, 205, 225, 190, 260, 130, 225, 160 }) -> 30
+
+	@param groups - Число групп.
+	@param members - Размер группы.
+	@param numbers - Массив чисел.
+
+	@return std::pair - Найденная разница между числами или nullopt, если поиск безуспешен.
+	*/
+	template <typename TContainer = std::vector<int>, typename TNumber = typename std::remove_cvref_t<TContainer>::value_type>
+		requires std::ranges::range<TContainer> && std::is_integral_v<TNumber> && std::is_arithmetic_v<TNumber>
+	auto get_max_from_min_difference(const unsigned& groups, const unsigned& members, TContainer&& numbers)
+		-> std::optional<TNumber>
+	{
+		using TSize = typename std::remove_cvref_t<TContainer>::size_type;
+		using TData = std::vector<TNumber>;
+		using TResult = std::make_signed_t<TNumber>;
+		 
+		std::optional<TNumber> result{ std::nullopt };
+		static_assert(std::is_signed_v<TResult>, "Type TResult must be signed!");
+		// Размер входных данных
+		TSize size_data{ static_cast<TSize>(std::ranges::distance(numbers)) };
+		// Суммарный размер групп
+		TSize size_groups{ static_cast<TSize>(groups * members) };
+		// Вычисляем смещение, начиная с которого ищем непересекающуюся группу с результирующей разницей
+		TSize offset{ static_cast<TSize>(members * (groups - 1)) };
+		// Если сформировать требуемое количество групп невозможно, досрочно выходим
+		if (size_data == 0 or size_groups > size_data or size_groups <= 0)
+			return result;
+		// Формируем список всех возможных групп заданного размера (members)
+		std::vector<std::pair<TSize, TNumber>> diff_groups{};
+		{
+			TData _numbers{ std::ranges::cbegin(numbers), std::ranges::cend(numbers) };
+			std::ranges::sort(_numbers);
+			TSize group_key{ 0 };
+			for (auto it_first{ _numbers.cbegin() }, it_last{ std::ranges::next(it_first, members - 1, _numbers.cend()) };
+				it_last < _numbers.cend(); ++it_first, ++it_last, ++group_key)
+			{
+				// В список отбираются только те ключи, которые позволяют сформировать заданное число групп
+				if (group_key <= (size_data - size_groups) || group_key >= offset)
+					diff_groups.emplace_back(group_key, (*it_last - *it_first));
+			}
+		}
+
+		if (!diff_groups.empty())
+		{
+			// Сортируем группы по возрастанию величины разницы между числами в группе
+			std::ranges::sort(diff_groups, [](const auto& a, const auto& b) { return a.second < b.second; });
+			// Достаточно отобрать только первый ключ, который должен иметь пару с заданным смещением
+			auto start_key{ (*diff_groups.cbegin()).first };
+			constexpr auto _abs = [](TSize n) ->TSize { return (n < 0) ? (~n + 1) : n; };
+			// Ищем ближайшую пару для стартового ключа с заданным смещением
+			auto max_diff = [&start_key, &offset](const auto& item) {return _abs(item.first - start_key) >= offset; };
+			// Найденная пара является той группой, разница чисел в которой и есть искомый результат
+			for (const auto& item : diff_groups | std::views::filter(max_diff))
+				return std::optional<TNumber>{item.second};
+		}
+		// Если найти группу невозможно, возвращаем nullopt
+		return result;
 	};
 } 
